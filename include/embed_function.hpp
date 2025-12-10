@@ -110,12 +110,12 @@ SOFTWARE.
 # endif
 #endif
 
-/// @c EMBED_CXX17_CONSTEXPR
-#ifndef EMBED_CXX17_CONSTEXPR
-# if EMBED_CXX_VERSION >= 201703L
-#  define EMBED_CXX17_CONSTEXPR constexpr
+/// @c EMBED_CXX14_CONSTEXPR
+#ifndef EMBED_CXX14_CONSTEXPR
+# if EMBED_CXX_VERSION >= 201402L
+#  define EMBED_CXX14_CONSTEXPR constexpr
 # else
-#  define EMBED_CXX17_CONSTEXPR
+#  define EMBED_CXX14_CONSTEXPR
 # endif
 #endif
 
@@ -498,7 +498,24 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, sizeof...(Args)-1>
     >::type { };
 
-  };
+    /// @e invoke_r
+    template <typename RetType, typename Callable, typename... ArgsType>
+    static EMBED_CXX14_CONSTEXPR
+    typename std::enable_if<!std::is_void<RetType>::value, RetType>::type
+    invoke_r(Callable&& fn, ArgsType&&... args)
+    {
+      return std::forward<Callable>(fn)(std::forward<ArgsType>(args)...);
+    }
+
+    template <typename RetType, typename Callable, typename... ArgsType>
+    static EMBED_CXX14_CONSTEXPR
+    typename std::enable_if<std::is_void<RetType>::value>::type
+    invoke_r(Callable&& fn, ArgsType&&... args)
+    {
+      std::forward<Callable>(fn)(std::forward<ArgsType>(args)...);
+    }
+
+  }; // end FnTraits
 
 
   /**
@@ -599,10 +616,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
-      if EMBED_CXX17_CONSTEXPR ( !std::is_void<RetType>::value )
-        return (*M_get_pointer(functor)) (std::forward<ArgsType>(args)...);
-      else
-        (*M_get_pointer(functor)) (std::forward<ArgsType>(args)...);
+      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
+        std::forward<ArgsType>(args)...);
     }
 
 #endif
@@ -658,10 +673,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
-      if EMBED_CXX17_CONSTEXPR ( !std::is_void<RetType>::value )
-        return (*Base::M_get_pointer(functor)) (std::forward<ArgsType>(args)...);
-      else
-        (*Base::M_get_pointer(functor)) (std::forward<ArgsType>(args)...);
+      return FnTraits::invoke_r<RetType>(*Base::M_get_pointer(functor),
+        std::forward<ArgsType>(args)...);
     }
 
   };
