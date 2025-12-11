@@ -432,58 +432,26 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       using type = typename unwrap_package<Index-1, args_package<Res...>>::type;
     };
 
-#if defined(__GNUC__)
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Wctor-dtor-privacy"
-# pragma GCC diagnostic ignored "-Wreturn-type"
-#endif
-
-    /// @e is_nothrow_convertible
-    template <typename From, typename To>
-    struct is_nothrow_convertible
-    {
-      static From S_get() noexcept { return std::declval<From>(); };
-
-      template <typename T> static void S_check(T) noexcept {};
-
-      template <typename T,
-        bool NoThrow = noexcept(S_check<T>(S_get())),
-        typename = decltype(S_check<T>(S_get()))
-      >
-      static typename std::integral_constant<
-        bool, NoThrow
-      >::type
-      S_test(int) noexcept
-      {
-        return std::integral_constant<bool, NoThrow>();
-      }
-
-      template <typename, bool = false>
-      static std::false_type S_test(...) noexcept { return std::false_type(); }
-
-      static constexpr bool value = decltype(S_test<To>(1))::value;
-    };
-
-#if defined(__GNUC__)
-# pragma GCC diagnostic pop
-#endif
-
     /// @e arguments_can_conv_impl
     template <typename ArgsPackageFrom, typename ArgsPackageTo, std::size_t Idx>
     struct arguments_can_conv_impl
     {
-      static constexpr bool value = is_nothrow_convertible<
-        typename unwrap_package<Idx, ArgsPackageFrom>::type,
-        typename unwrap_package<Idx, ArgsPackageTo>::type
+      using FromType = typename std::remove_const<typename unwrap_package<Idx, ArgsPackageFrom>::type>::type;
+      using ToType = typename std::remove_const<typename unwrap_package<Idx, ArgsPackageTo>::type>::type;
+
+      static constexpr bool value = std::is_same<
+        FromType, ToType  
       >::value && arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, Idx-1>::value;
     };
 
     template <typename ArgsPackageFrom, typename ArgsPackageTo>
     struct arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, 0>
     {
-      static constexpr bool value = is_nothrow_convertible<
-        typename unwrap_package<0, ArgsPackageFrom>::type,
-        typename unwrap_package<0, ArgsPackageTo>::type
+      using FromType = typename std::remove_const<typename unwrap_package<0, ArgsPackageFrom>::type>::type;
+      using ToType = typename std::remove_const<typename unwrap_package<0, ArgsPackageTo>::type>::type;
+
+      static constexpr bool value = std::is_same<
+        FromType, ToType
       >::value;
     };
 
@@ -778,7 +746,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Construct Fn<Sig_A> with Fn<Sig_B>
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
-    // `Sig_A.args` can convert to `Sig_B.args`.
+    // `Sig_A.args` are same with `Sig_B.args`.
     template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
     Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn) noexcept
     {
@@ -911,7 +879,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Construct Fn<Sig_A> with Fn<Sig_B>
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
-    // `Sig_A.args` can convert to `Sig_B.args`.
+    // `Sig_A.args` are same with `Sig_B.args`.
     template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
     Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn) noexcept
     {
