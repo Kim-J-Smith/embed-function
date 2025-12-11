@@ -395,18 +395,15 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #endif
     };
 
+    /// @e results_are_same
     template <typename RetFrom, typename RetTo>
-    struct result_can_conv_helper
+    struct results_are_same
     {
-      struct tmpT { using type = RetFrom; };
-      using type = typename is_invocable_impl<tmpT, RetTo>::type;
-    };
+      using nc_From = typename std::remove_const<RetFrom>::type;
+      using nc_To = typename std::remove_const<RetTo>::type;
 
-    /// @e result_can_conv
-    template <typename RetFrom, typename RetTo>
-    struct result_can_conv
-    : public result_can_conv_helper<RetFrom, RetTo>::type
-    { };
+      static constexpr bool value = std::is_same<nc_From, nc_To>::value;
+    };
 
     /// @e args_package
     template <typename... ArgsT>
@@ -432,20 +429,20 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       using type = typename unwrap_package<Index-1, args_package<Res...>>::type;
     };
 
-    /// @e arguments_can_conv_impl
+    /// @e arguments_are_same_impl
     template <typename ArgsPackageFrom, typename ArgsPackageTo, std::size_t Idx>
-    struct arguments_can_conv_impl
+    struct arguments_are_same_impl
     {
       using FromType = typename std::remove_const<typename unwrap_package<Idx, ArgsPackageFrom>::type>::type;
       using ToType = typename std::remove_const<typename unwrap_package<Idx, ArgsPackageTo>::type>::type;
 
       static constexpr bool value = std::is_same<
         FromType, ToType  
-      >::value && arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, Idx-1>::value;
+      >::value && arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, Idx-1>::value;
     };
 
     template <typename ArgsPackageFrom, typename ArgsPackageTo>
-    struct arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, 0>
+    struct arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, 0>
     {
       using FromType = typename std::remove_const<typename unwrap_package<0, ArgsPackageFrom>::type>::type;
       using ToType = typename std::remove_const<typename unwrap_package<0, ArgsPackageTo>::type>::type;
@@ -456,14 +453,14 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     };
 
     template <typename ArgsPackageFrom, typename ArgsPackageTo>
-    struct arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, (std::size_t)-1>
+    struct arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, (std::size_t)-1>
     { static constexpr bool value = false; };
 
-    /// @e arguments_can_conv
+    /// @e arguments_are_same
     template <typename ArgsPackageFrom, typename ArgsPackageTo, typename... Args>
-    struct arguments_can_conv : public std::conditional<
+    struct arguments_are_same : public std::conditional<
       sizeof...(Args) == 0, std::true_type,
-      arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, sizeof...(Args)-1>
+      arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, sizeof...(Args)-1>
     >::type { };
 
     /// @e invoke_r
@@ -759,13 +756,13 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         "embed::Fn don't allow transform small Fn to large Fn");
 
       static_assert(
-        FnTraits::result_can_conv<OtherRet, RetType>::value,
+        FnTraits::results_are_same<OtherRet, RetType>::value,
         "embed::Fn<A> copy from embed::Fn<B> require their return type can be convertible"
       );
 
       static_assert(
         sizeof... (ArgsType) == sizeof... (OtherArgs)
-        && FnTraits::arguments_can_conv<
+        && FnTraits::arguments_are_same<
           FnTraits::args_package<ArgsType...>,
           FnTraits::args_package<OtherArgs...>,
           ArgsType...
@@ -892,18 +889,18 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         "embed::Fn don't allow transform small Fn to large Fn");
 
       static_assert(
-        FnTraits::result_can_conv<OtherRet, RetType>::value,
-        "embed::Fn<A> copy from embed::Fn<B> require their return type can be convertible"
+        FnTraits::results_are_same<OtherRet, RetType>::value,
+        "embed::Fn<A> copy from embed::Fn<B> require their return type is same (can be const)"
       );
 
       static_assert(
         sizeof... (ArgsType) == sizeof... (OtherArgs)
-        && FnTraits::arguments_can_conv<
+        && FnTraits::arguments_are_same<
           FnTraits::args_package<ArgsType...>,
           FnTraits::args_package<OtherArgs...>,
           ArgsType...
         >::value,
-        "embed::Fn<A> copy from embed::Fn<B> require their arguments type can be convertible"
+        "embed::Fn<A> copy from embed::Fn<B> require their argument types are same (can be const)"
       );
 
       if (static_cast<bool>(fn))
