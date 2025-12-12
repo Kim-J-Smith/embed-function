@@ -457,10 +457,10 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     { static constexpr bool value = false; };
 
     /// @e arguments_are_same
-    template <typename ArgsPackageFrom, typename ArgsPackageTo, typename... Args>
+    template <typename ArgsPackageFrom, typename ArgsPackageTo, std::size_t ArgNum>
     struct arguments_are_same : public std::conditional<
-      sizeof...(Args) == 0, std::true_type,
-      arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, sizeof...(Args)-1>
+      ArgNum == 0, std::true_type,
+      arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, ArgNum-1>
     >::type { };
 
     /// @e invoke_r
@@ -479,6 +479,19 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     {
       std::forward<Callable>(fn)(std::forward<ArgsType>(args)...);
     }
+
+    /// @e is_similar_Fn
+    template <
+      typename SelfRet, typename SelfArgs_package, std::size_t SelfArgNum, std::size_t SelfBuf,
+      typename OtherRet, typename OtherArgs_package, std::size_t OtherArgNum, std::size_t OtherBuf>
+    struct is_similar_Fn
+    {
+      static constexpr bool value = 
+        ( aligned_buf_size<SelfBuf>::value >= aligned_buf_size<OtherBuf>::value )
+        && results_are_same<OtherRet, SelfRet>::value
+        && ( SelfArgNum == OtherArgNum )
+        && arguments_are_same<SelfArgs_package, OtherArgs_package, SelfArgNum>::value;
+    };
 
   }; // end FnTraits
 
@@ -745,31 +758,17 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
     // `Sig_A.args` are same with `Sig_B.args`.
     template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
-    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn) noexcept
-    {
-      static constexpr std::size_t other_aligned_size = 
-        FnTraits::aligned_buf_size<OtherSize>::value;
-      static constexpr std::size_t self_aligned_size =
-        FnTraits::aligned_buf_size<BufSize>::value;
-
-      static_assert(other_aligned_size <= self_aligned_size,
-        "embed::Fn don't allow transform small Fn to large Fn");
-
-      static_assert(
-        FnTraits::results_are_same<OtherRet, RetType>::value,
-        "embed::Fn<A> copy from embed::Fn<B> require their return type can be convertible"
-      );
-
-      static_assert(
-        sizeof... (ArgsType) == sizeof... (OtherArgs)
-        && FnTraits::arguments_are_same<
-          FnTraits::args_package<ArgsType...>,
-          FnTraits::args_package<OtherArgs...>,
-          ArgsType...
+    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn)
+    noexcept(
+      std::enable_if<
+        FnTraits::is_similar_Fn<
+          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
+          OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
         >::value,
-        "embed::Fn<A> copy from embed::Fn<B> require their arguments type can be convertible"
-      );
-
+        std::true_type
+      >::type::value
+    )
+    {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
@@ -878,31 +877,17 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
     // `Sig_A.args` are same with `Sig_B.args`.
     template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
-    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn) noexcept
-    {
-      static constexpr std::size_t other_aligned_size = 
-        FnTraits::aligned_buf_size<OtherSize>::value;
-      static constexpr std::size_t self_aligned_size =
-        FnTraits::aligned_buf_size<BufSize>::value;
-
-      static_assert(other_aligned_size <= self_aligned_size,
-        "embed::Fn don't allow transform small Fn to large Fn");
-
-      static_assert(
-        FnTraits::results_are_same<OtherRet, RetType>::value,
-        "embed::Fn<A> copy from embed::Fn<B> require their return type is same (can be const)"
-      );
-
-      static_assert(
-        sizeof... (ArgsType) == sizeof... (OtherArgs)
-        && FnTraits::arguments_are_same<
-          FnTraits::args_package<ArgsType...>,
-          FnTraits::args_package<OtherArgs...>,
-          ArgsType...
+    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn)
+    noexcept(
+      std::enable_if<
+        FnTraits::is_similar_Fn<
+          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
+          OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
         >::value,
-        "embed::Fn<A> copy from embed::Fn<B> require their argument types are same (can be const)"
-      );
-
+        std::true_type
+      >::type::value
+    )
+    {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
