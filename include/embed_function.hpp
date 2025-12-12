@@ -248,31 +248,6 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         ((BufSize - 1) / sizeof(void*) + 1) * sizeof(void*);
     };
 
-    /// @e Is_Fn
-    template <typename T>
-    struct Is_Fn_helper : public std::false_type
-    { };
-
-    template <typename Signature, std::size_t BufSize>
-    struct Is_Fn_helper<Fn<Signature, BufSize>>
-    : public std::true_type { };
-
-    template <typename T>
-    struct Is_Fn : public Is_Fn_helper<
-      typename std::remove_reference<
-        typename std::remove_cv<T>::type
-      >::type
-    >::type { };
-
-    /// @e DecayFunctor_t
-    template <
-      typename Functor,
-      bool Self = Is_Fn<Functor>::value
-    >
-    using DecayFunctor_t = typename std::enable_if<
-      !Self, typename std::decay<Functor>::type
-    >::type;
-
     template <typename T> using void_t = void;
 
     template <typename Func, typename... ArgsT>
@@ -371,10 +346,10 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     template <typename RetT, typename Functor, typename... ArgsT>
     struct Callable
     : public is_invocable_impl<
-      invoke_result<DecayFunctor_t<Functor>&, ArgsT...>, RetT
+      invoke_result<typename std::decay<Functor>::type&, ArgsT...>, RetT
     >::type
     {
-      using Caller = DecayFunctor_t<Functor>&;
+      using Caller = typename std::decay<Functor>::type&;
       using Result = invoke_result<Caller, ArgsT...>;
 
 #if ( EMBED_CXX_VERSION >= 201703L )
@@ -668,7 +643,14 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   {
   private:
     template <typename Functor>
-    using DecayFunc_t = FnTraits::DecayFunctor_t<Functor>;
+    using DecayFunc_t = typename std::enable_if<
+      !std::is_same<Fn,
+        typename std::remove_cv<
+          typename std::remove_reference<Functor>::type
+        >::type
+      >::value,
+      typename std::decay<Functor>::type
+    >::type;
 
     template <typename Functor>
     using MyManager = FnManager<RetType(ArgsType...), Functor, BufSize>;
