@@ -140,16 +140,6 @@ SOFTWARE.
 # endif
 #endif
 
-/// @c EMBED_CLANG_NODEBUG
-// Only used for Clang++
-#ifndef EMBED_CLANG_NODEBUG
-# if defined(__clang__)
-#  define EMBED_CLANG_NODEBUG [[gnu::nodebug]]
-# else
-#  define EMBED_CLANG_NODEBUG
-# endif
-#endif
-
 // Header files
 #if EMBED_CXX_VERSION >= 201103L
 # include <cstddef> // std::size_t
@@ -674,7 +664,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   {
   private:
     template <typename Functor>
-    using DecayFunc_t EMBED_CLANG_NODEBUG = typename std::enable_if<
+    using DecayFunc_t = typename std::enable_if<
       !std::is_same<Fn,
         typename std::remove_cv<
           typename std::remove_reference<Functor>::type
@@ -684,7 +674,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     >::type;
 
     template <typename Functor>
-    using MyManager EMBED_CLANG_NODEBUG = FnManager<RetType(ArgsType...), Functor, BufSize>;
+    using MyManager = FnManager<RetType(ArgsType...), Functor, BufSize>;
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
     template <typename Functor>
@@ -692,11 +682,11 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #endif
 
     template <typename Functor>
-    using Callable EMBED_CLANG_NODEBUG = FnTraits::Callable<RetType, Functor, ArgsType...>;
+    using Callable = FnTraits::Callable<RetType, Functor, ArgsType...>;
 
-    using Invoker_Type EMBED_CLANG_NODEBUG = RetType (*) (const _FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const _FnFunctor<BufSize>&, ArgsType&&...);
 
-    using Manager_Type EMBED_CLANG_NODEBUG = 
+    using Manager_Type = 
       Invoker_Type (*) (_FnFunctor<BufSize>&, const _FnFunctor<BufSize>&, manOpcode) EMBED_CXX17_NOEXCEPT;
 
   private:
