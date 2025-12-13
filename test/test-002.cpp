@@ -19,6 +19,8 @@ void test_002()
 
     embed::function<void(int, long, double), 16> fn4 = fn3;
 
+    embed::function<void(int, long, double), 16> fn5;
+
     int ret = fn1(1, 2, 3.14f);
     fn3(1, 2, 4.6677);
 
@@ -32,6 +34,9 @@ void test_002()
     catch(const std::exception& e) {
         std::cerr << e.what() << std::endl;
     }
+
+    fn5 = fn2;
+    fn5(1, 666, 777.0);
 
     std::cout << "ret = " << ret << std::endl;
     std::cout << "test - 002 finish" << std::endl;
