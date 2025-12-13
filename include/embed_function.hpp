@@ -26,7 +26,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     0.1.0
+ * @version     1.0.0
  * 
  * @date        2025-12-6
  * 
@@ -34,8 +34,8 @@ SOFTWARE.
  */
 
 /// @c C++11 "embed_function.hpp"
-#ifndef EMBED_FUNC_HPP_
-#define EMBED_FUNC_HPP_
+#ifndef EMBED_FUNCTION_HPP_
+#define EMBED_FUNCTION_HPP_
 
 ////////////////////////////////////////////////////////////////
 
@@ -116,6 +116,15 @@ SOFTWARE.
 #  define EMBED_CXX14_CONSTEXPR constexpr
 # else
 #  define EMBED_CXX14_CONSTEXPR
+# endif
+#endif
+
+/// @c EMBED_CLANG_INLINE
+#ifndef EMBED_CLANG_INLINE
+# if defined(__clang__)
+#  define EMBED_CLANG_INLINE __attribute__((always_inline))
+# else
+#  define EMBED_CLANG_INLINE
 # endif
 #endif
 
@@ -694,17 +703,17 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Default destructor for embed::Fn.
     // Destroy the functor, call functor's destructor.
-    ~Fn() noexcept
+    EMBED_CLANG_INLINE ~Fn() noexcept
     {
       if (M_manager)
         (void)M_manager(M_functor, M_functor, OP_destroy_functor);
     }
 
     // Create an empty function wrapper.
-    Fn() noexcept {}
+    EMBED_CLANG_INLINE Fn() noexcept {}
 
     // Create an empty function wrapper.
-    Fn(std::nullptr_t) noexcept {}
+    EMBED_CLANG_INLINE Fn(std::nullptr_t) noexcept {}
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
 
@@ -1060,5 +1069,5 @@ namespace std EMBED_ABI_VISIBILITY(default)
 
 }
 
-#endif // EMBED_FUNC_HPP_
+#endif // EMBED_FUNCTION_HPP_
 
