@@ -94,6 +94,15 @@ SOFTWARE.
 # endif
 #endif
 
+/// @brief warning if exception is enabled.
+#ifndef EMBED_NO_WARNING
+# if ( EMBED_CXX_ENABLE_EXCEPTION != 0 ) && (defined(__riscv) || defined(__arm__))
+#  warning You are using c++ exception, which may consume more ROM.\
+ Try use `-fno-exceptions` to disable the exception. Or if you exactly\
+ want to enable the exception, then please use `-DEMBED_NO_WARNING=1` to ignore this warning.
+# endif
+#endif
+
 /// @c EMBED_ABI_VISIBILITY
 #ifndef EMBED_ABI_VISIBILITY
 # if defined(__GNUC__) || defined(__clang__)
