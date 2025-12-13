@@ -991,9 +991,17 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     /// @deprecated operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
-    template <typename RetT, std::size_t Size, typename... ArgsT>
-    Fn& operator=(const Fn<RetT(ArgsT...), Size>& fn) noexcept
-    {
+    template <typename RetT, std::size_t OtherBufSize, typename... ArgsT>
+    EMBED_CLANG_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
+    noexcept(
+      std::enable_if<
+        FnTraits::is_similar_Fn<
+          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
+          RetT, FnTraits::args_package<ArgsT...>, sizeof...(ArgsT), OtherBufSize
+        >::value,
+        std::true_type
+      >::type::value
+    ) {
       Fn(fn).swap(*this);
       return *this;
     }
