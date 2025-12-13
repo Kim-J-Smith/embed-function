@@ -26,7 +26,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     0.1.0
+ * @version     1.0.0
  * 
  * @date        2025-12-6
  * 
@@ -34,8 +34,8 @@ SOFTWARE.
  */
 
 /// @c C++11 "embed_function.hpp"
-#ifndef EMBED_FUNC_HPP_
-#define EMBED_FUNC_HPP_
+#ifndef EMBED_FUNCTION_HPP_
+#define EMBED_FUNCTION_HPP_
 
 ////////////////////////////////////////////////////////////////
 
@@ -110,12 +110,21 @@ SOFTWARE.
 # endif
 #endif
 
-/// @c EMBED_CXX17_CONSTEXPR
-#ifndef EMBED_CXX17_CONSTEXPR
-# if EMBED_CXX_VERSION >= 201703L
-#  define EMBED_CXX17_CONSTEXPR constexpr
+/// @c EMBED_CXX14_CONSTEXPR
+#ifndef EMBED_CXX14_CONSTEXPR
+# if EMBED_CXX_VERSION >= 201402L
+#  define EMBED_CXX14_CONSTEXPR constexpr
 # else
-#  define EMBED_CXX17_CONSTEXPR
+#  define EMBED_CXX14_CONSTEXPR
+# endif
+#endif
+
+/// @c EMBED_CLANG_INLINE
+#ifndef EMBED_CLANG_INLINE
+# if defined(__clang__)
+#  define EMBED_CLANG_INLINE __attribute__((always_inline))
+# else
+#  define EMBED_CLANG_INLINE
 # endif
 #endif
 
@@ -248,31 +257,6 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         ((BufSize - 1) / sizeof(void*) + 1) * sizeof(void*);
     };
 
-    /// @e Is_Fn
-    template <typename T>
-    struct Is_Fn_helper : public std::false_type
-    { };
-
-    template <typename Signature, std::size_t BufSize>
-    struct Is_Fn_helper<Fn<Signature, BufSize>>
-    : public std::true_type { };
-
-    template <typename T>
-    struct Is_Fn : public Is_Fn_helper<
-      typename std::remove_reference<
-        typename std::remove_cv<T>::type
-      >::type
-    >::type { };
-
-    /// @e DecayFunctor_t
-    template <
-      typename Functor,
-      bool Self = Is_Fn<Functor>::value
-    >
-    using DecayFunctor_t = typename std::enable_if<
-      !Self, typename std::decay<Functor>::type
-    >::type;
-
     template <typename T> using void_t = void;
 
     template <typename Func, typename... ArgsT>
@@ -371,10 +355,10 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     template <typename RetT, typename Functor, typename... ArgsT>
     struct Callable
     : public is_invocable_impl<
-      invoke_result<DecayFunctor_t<Functor>&, ArgsT...>, RetT
+      invoke_result<typename std::decay<Functor>::type&, ArgsT...>, RetT
     >::type
     {
-      using Caller = DecayFunctor_t<Functor>&;
+      using Caller = typename std::decay<Functor>::type&;
       using Result = invoke_result<Caller, ArgsT...>;
 
 #if ( EMBED_CXX_VERSION >= 201703L )
@@ -395,18 +379,15 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #endif
     };
 
+    /// @e results_are_same
     template <typename RetFrom, typename RetTo>
-    struct result_can_conv_helper
+    struct results_are_same
     {
-      struct tmpT { using type = RetFrom; };
-      using type = typename is_invocable_impl<tmpT, RetTo>::type;
-    };
+      using nc_From = typename std::remove_const<RetFrom>::type;
+      using nc_To = typename std::remove_const<RetTo>::type;
 
-    /// @e result_can_conv
-    template <typename RetFrom, typename RetTo>
-    struct result_can_conv
-    : public result_can_conv_helper<RetFrom, RetTo>::type
-    { };
+      static constexpr bool value = std::is_same<nc_From, nc_To>::value;
+    };
 
     /// @e args_package
     template <typename... ArgsT>
@@ -432,73 +413,71 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       using type = typename unwrap_package<Index-1, args_package<Res...>>::type;
     };
 
-#if defined(__GNUC__)
-# pragma GCC diagnostic push
-# pragma GCC diagnostic ignored "-Wctor-dtor-privacy"
-# pragma GCC diagnostic ignored "-Wreturn-type"
-#endif
-
-    /// @e is_nothrow_convertible
-    template <typename From, typename To>
-    struct is_nothrow_convertible
-    {
-      static From S_get() noexcept { return std::declval<From>(); };
-
-      template <typename T> static void S_check(T) noexcept {};
-
-      template <typename T,
-        bool NoThrow = noexcept(S_check<T>(S_get())),
-        typename = decltype(S_check<T>(S_get()))
-      >
-      static typename std::integral_constant<
-        bool, NoThrow
-      >::type
-      S_test(int) noexcept
-      {
-        return std::integral_constant<bool, NoThrow>();
-      }
-
-      template <typename, bool = false>
-      static std::false_type S_test(...) noexcept { return std::false_type(); }
-
-      static constexpr bool value = decltype(S_test<To>(1))::value;
-    };
-
-#if defined(__GNUC__)
-# pragma GCC diagnostic pop
-#endif
-
-    /// @e arguments_can_conv_impl
+    /// @e arguments_are_same_impl
     template <typename ArgsPackageFrom, typename ArgsPackageTo, std::size_t Idx>
-    struct arguments_can_conv_impl
+    struct arguments_are_same_impl
     {
-      static constexpr bool value = is_nothrow_convertible<
-        typename unwrap_package<Idx, ArgsPackageFrom>::type,
-        typename unwrap_package<Idx, ArgsPackageTo>::type
-      >::value && arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, Idx-1>::value;
+      using FromType = typename std::remove_const<typename unwrap_package<Idx, ArgsPackageFrom>::type>::type;
+      using ToType = typename std::remove_const<typename unwrap_package<Idx, ArgsPackageTo>::type>::type;
+
+      static constexpr bool value = std::is_same<
+        FromType, ToType  
+      >::value && arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, Idx-1>::value;
     };
 
     template <typename ArgsPackageFrom, typename ArgsPackageTo>
-    struct arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, 0>
+    struct arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, 0>
     {
-      static constexpr bool value = is_nothrow_convertible<
-        typename unwrap_package<0, ArgsPackageFrom>::type,
-        typename unwrap_package<0, ArgsPackageTo>::type
+      using FromType = typename std::remove_const<typename unwrap_package<0, ArgsPackageFrom>::type>::type;
+      using ToType = typename std::remove_const<typename unwrap_package<0, ArgsPackageTo>::type>::type;
+
+      static constexpr bool value = std::is_same<
+        FromType, ToType
       >::value;
     };
 
     template <typename ArgsPackageFrom, typename ArgsPackageTo>
-    struct arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, (std::size_t)-1>
+    struct arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, (std::size_t)-1>
     { static constexpr bool value = false; };
 
-    /// @e arguments_can_conv
-    template <typename ArgsPackageFrom, typename ArgsPackageTo, typename... Args>
-    struct arguments_can_conv : public std::conditional<
-      sizeof...(Args) == 0, std::true_type,
-      arguments_can_conv_impl<ArgsPackageFrom, ArgsPackageTo, sizeof...(Args)-1>
+    /// @e arguments_are_same
+    template <typename ArgsPackageFrom, typename ArgsPackageTo, std::size_t ArgNum>
+    struct arguments_are_same : public std::conditional<
+      ArgNum == 0, std::true_type,
+      arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, ArgNum-1>
     >::type { };
 
-  };
+    /// @e invoke_r
+    template <typename RetType, typename Callable, typename... ArgsType>
+    static EMBED_CXX14_CONSTEXPR
+    typename std::enable_if<!std::is_void<RetType>::value, RetType>::type
+    invoke_r(Callable&& fn, ArgsType&&... args)
+    {
+      return std::forward<Callable>(fn)(std::forward<ArgsType>(args)...);
+    }
+
+    template <typename RetType, typename Callable, typename... ArgsType>
+    static EMBED_CXX14_CONSTEXPR
+    typename std::enable_if<std::is_void<RetType>::value>::type
+    invoke_r(Callable&& fn, ArgsType&&... args)
+    {
+      std::forward<Callable>(fn)(std::forward<ArgsType>(args)...);
+    }
+
+    /// @e is_similar_Fn
+    template <
+      typename SelfRet, typename SelfArgs_package, std::size_t SelfArgNum, std::size_t SelfBuf,
+      typename OtherRet, typename OtherArgs_package, std::size_t OtherArgNum, std::size_t OtherBuf>
+    struct is_similar_Fn
+    {
+      static constexpr bool value = 
+        ( aligned_buf_size<SelfBuf>::value >= aligned_buf_size<OtherBuf>::value )
+        && results_are_same<OtherRet, SelfRet>::value
+        && ( SelfArgNum == OtherArgNum )
+        && arguments_are_same<SelfArgs_package, OtherArgs_package, SelfArgNum>::value;
+    };
+
+  }; // end FnTraits
 
 
   /**
@@ -599,10 +578,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
-      if EMBED_CXX17_CONSTEXPR ( !std::is_void<RetType>::value )
-        return (*M_get_pointer(functor)) (std::forward<ArgsType>(args)...);
-      else
-        (*M_get_pointer(functor)) (std::forward<ArgsType>(args)...);
+      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
+        std::forward<ArgsType>(args)...);
     }
 
 #endif
@@ -658,10 +635,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
-      if EMBED_CXX17_CONSTEXPR ( !std::is_void<RetType>::value )
-        return (*Base::M_get_pointer(functor)) (std::forward<ArgsType>(args)...);
-      else
-        (*Base::M_get_pointer(functor)) (std::forward<ArgsType>(args)...);
+      return FnTraits::invoke_r<RetType>(*Base::M_get_pointer(functor),
+        std::forward<ArgsType>(args)...);
     }
 
   };
@@ -677,7 +652,14 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   {
   private:
     template <typename Functor>
-    using DecayFunc_t = FnTraits::DecayFunctor_t<Functor>;
+    using DecayFunc_t = typename std::enable_if<
+      !std::is_same<Fn,
+        typename std::remove_cv<
+          typename std::remove_reference<Functor>::type
+        >::type
+      >::value,
+      typename std::decay<Functor>::type
+    >::type;
 
     template <typename Functor>
     using MyManager = FnManager<RetType(ArgsType...), Functor, BufSize>;
@@ -721,17 +703,17 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Default destructor for embed::Fn.
     // Destroy the functor, call functor's destructor.
-    ~Fn() noexcept
+    EMBED_CLANG_INLINE ~Fn() noexcept
     {
       if (M_manager)
         (void)M_manager(M_functor, M_functor, OP_destroy_functor);
     }
 
     // Create an empty function wrapper.
-    Fn() noexcept {}
+    EMBED_CLANG_INLINE Fn() noexcept {}
 
     // Create an empty function wrapper.
-    Fn(std::nullptr_t) noexcept {}
+    EMBED_CLANG_INLINE Fn(std::nullptr_t) noexcept {}
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
 
@@ -765,33 +747,19 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Construct Fn<Sig_A> with Fn<Sig_B>
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
-    // `Sig_A.args` can convert to `Sig_B.args`.
+    // `Sig_A.args` are same with `Sig_B.args`.
     template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
-    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn) noexcept
-    {
-      static constexpr std::size_t other_aligned_size = 
-        FnTraits::aligned_buf_size<OtherSize>::value;
-      static constexpr std::size_t self_aligned_size =
-        FnTraits::aligned_buf_size<BufSize>::value;
-
-      static_assert(other_aligned_size <= self_aligned_size,
-        "embed::Fn don't allow transform small Fn to large Fn");
-
-      static_assert(
-        FnTraits::result_can_conv<OtherRet, RetType>::value,
-        "embed::Fn<A> copy from embed::Fn<B> require their return type can be convertible"
-      );
-
-      static_assert(
-        sizeof... (ArgsType) == sizeof... (OtherArgs)
-        && FnTraits::arguments_can_conv<
-          FnTraits::args_package<ArgsType...>,
-          FnTraits::args_package<OtherArgs...>,
-          ArgsType...
+    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn)
+    noexcept(
+      std::enable_if<
+        FnTraits::is_similar_Fn<
+          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
+          OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
         >::value,
-        "embed::Fn<A> copy from embed::Fn<B> require their arguments type can be convertible"
-      );
-
+        std::true_type
+      >::type::value
+    )
+    {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
@@ -898,33 +866,19 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Construct Fn<Sig_A> with Fn<Sig_B>
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
-    // `Sig_A.args` can convert to `Sig_B.args`.
+    // `Sig_A.args` are same with `Sig_B.args`.
     template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
-    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn) noexcept
-    {
-      static constexpr std::size_t other_aligned_size = 
-        FnTraits::aligned_buf_size<OtherSize>::value;
-      static constexpr std::size_t self_aligned_size =
-        FnTraits::aligned_buf_size<BufSize>::value;
-
-      static_assert(other_aligned_size <= self_aligned_size,
-        "embed::Fn don't allow transform small Fn to large Fn");
-
-      static_assert(
-        FnTraits::result_can_conv<OtherRet, RetType>::value,
-        "embed::Fn<A> copy from embed::Fn<B> require their return type can be convertible"
-      );
-
-      static_assert(
-        sizeof... (ArgsType) == sizeof... (OtherArgs)
-        && FnTraits::arguments_can_conv<
-          FnTraits::args_package<ArgsType...>,
-          FnTraits::args_package<OtherArgs...>,
-          ArgsType...
+    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn)
+    noexcept(
+      std::enable_if<
+        FnTraits::is_similar_Fn<
+          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
+          OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
         >::value,
-        "embed::Fn<A> copy from embed::Fn<B> require their arguments type can be convertible"
-      );
-
+        std::true_type
+      >::type::value
+    )
+    {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
@@ -1115,5 +1069,5 @@ namespace std EMBED_ABI_VISIBILITY(default)
 
 }
 
-#endif // EMBED_FUNC_HPP_
+#endif // EMBED_FUNCTION_HPP_
 

@@ -2,4 +2,7 @@
 *.exe
 *.d
 
-*build/*
+*build*
+.vscode/*
+*CMakeFiles*
+
