@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.0
+ * @version     1.0.1
  * 
  * @date        2025-12-6
  * 
@@ -130,13 +130,14 @@ SOFTWARE.
 # endif
 #endif
 
-/// @c EMBED_CLANG_INLINE
-// Only used for Clang++
-#ifndef EMBED_CLANG_INLINE
-# if defined(__clang__)
-#  define EMBED_CLANG_INLINE __attribute__((always_inline))
+/// @c EMBED_INLINE
+#ifndef EMBED_INLINE
+# if defined(__GNUC__) || defined(__clang__)
+#  define EMBED_INLINE __attribute__((always_inline))
+# elif defined(_MSC_VER)
+#  define EMBED_INLINE __forceinline
 # else
-#  define EMBED_CLANG_INLINE
+#  define EMBED_INLINE inline
 # endif
 #endif
 
@@ -715,17 +716,17 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Default destructor for embed::Fn.
     // Destroy the functor, call functor's destructor.
-    EMBED_CLANG_INLINE ~Fn() noexcept
+    EMBED_INLINE ~Fn() noexcept
     {
       if (M_manager)
         (void)M_manager(M_functor, M_functor, OP_destroy_functor);
     }
 
     // Create an empty function wrapper.
-    EMBED_CLANG_INLINE Fn() noexcept {}
+    EMBED_INLINE Fn() noexcept {}
 
     // Create an empty function wrapper.
-    EMBED_CLANG_INLINE Fn(std::nullptr_t) noexcept {}
+    EMBED_INLINE Fn(std::nullptr_t) noexcept {}
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
 
@@ -987,7 +988,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     /// @deprecated operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
-    EMBED_CLANG_INLINE Fn& operator=(const Fn& fn) noexcept
+    EMBED_INLINE Fn& operator=(const Fn& fn) noexcept
     {
       Fn(fn).swap(*this);
       return *this;
@@ -995,7 +996,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     /// @deprecated operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
-    EMBED_CLANG_INLINE Fn& operator=(Fn&& fn) noexcept
+    EMBED_INLINE Fn& operator=(Fn&& fn) noexcept
     {
       Fn(std::move(fn)).swap(*this);
       return *this;
@@ -1004,7 +1005,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @deprecated operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
     template <typename RetT, std::size_t OtherBufSize, typename... ArgsT>
-    EMBED_CLANG_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
+    EMBED_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
     noexcept(
       std::enable_if<
         FnTraits::is_similar_Fn<
@@ -1022,19 +1023,19 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// maybe copy/move constructor is better.
     template <typename Functor,
       typename DecayFunc = Fn::DecayFunc_t<Functor> >
-    EMBED_CLANG_INLINE Fn& operator=(Functor&& func) noexcept
+    EMBED_INLINE Fn& operator=(Functor&& func) noexcept
     {
       Fn(std::forward<Functor>(func)).swap(*this);
       return *this;
     }
 
     // check if the embed::Fn is empty.
-    bool is_empty() const noexcept
+    EMBED_INLINE bool is_empty() const noexcept
     {
       return static_cast<bool>( M_manager == nullptr );
     }
 
-    explicit operator bool() const noexcept
+    EMBED_INLINE explicit operator bool() const noexcept
     {
       return !is_empty();
     }
