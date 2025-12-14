@@ -96,7 +96,7 @@ SOFTWARE.
 
 /// @brief warning if exception is enabled.
 #ifndef EMBED_NO_WARNING
-# if ( EMBED_CXX_ENABLE_EXCEPTION != 0 ) && (defined(__riscv) || defined(__arm__))
+# if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  warning You are using c++ exception, which may consume more ROM.\
  Try use `-fno-exceptions` to disable the exception. Or if you exactly\
  want to enable the exception, then please use `-DEMBED_NO_WARNING=1` to ignore this warning.
