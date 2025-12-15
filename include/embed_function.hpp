@@ -713,6 +713,11 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     friend class Fn;
 
   public:
+    // See https://en.cppreference.com/w/cpp/utility/functional/function.html
+    // Get the return type.
+    using result_type = RetType;
+
+  public:
 
     // Default destructor for embed::Fn.
     // Destroy the functor, call functor's destructor.
