@@ -817,7 +817,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
-        Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, func);
+        Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
         M_manager = &Fn::MyManager<DecayFunctor>::M_manager;
         M_invoker = &Fn::MyInvoker<DecayFunctor>::M_invoke;
       }
@@ -935,7 +935,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
-        Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, func);
+        Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
         M_manager = &Fn::MyManager<DecayFunctor>::M_manager;
       }
     }
