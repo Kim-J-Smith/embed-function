@@ -176,8 +176,9 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     };
   };
 
-  /// @c throw_bad_function_call
-  [[noreturn]] static inline void throw_bad_function_call()
+  /// @c _throw_bad_function_call
+  // For private use only.
+  [[noreturn]] static inline void _throw_bad_function_call()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
@@ -853,7 +854,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
-        throw_bad_function_call(); /* throw exception */
+        _throw_bad_function_call(); /* throw exception */
     }
 #else
 
@@ -980,7 +981,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         return invoker(M_functor, std::forward<ArgsType>(args)...);
       }
       else
-        throw_bad_function_call(); /* throw exception */
+        _throw_bad_function_call(); /* throw exception */
     }
 
 # if defined(__clang__)
@@ -1040,6 +1041,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return static_cast<bool>( M_manager == nullptr );
     }
 
+    // `true` if the embed::Fn is not empty.
     EMBED_INLINE explicit operator bool() const noexcept
     {
       return !is_empty();
