@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.0
+ * @version     1.0.1
  * 
  * @date        2025-12-6
  * 
@@ -96,7 +96,7 @@ SOFTWARE.
 
 /// @brief warning if exception is enabled.
 #ifndef EMBED_NO_WARNING
-# if ( EMBED_CXX_ENABLE_EXCEPTION != 0 ) && (defined(__riscv) || defined(__arm__))
+# if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  warning You are using c++ exception, which may consume more ROM.\
  Try use `-fno-exceptions` to disable the exception. Or if you exactly\
  want to enable the exception, then please use `-DEMBED_NO_WARNING=1` to ignore this warning.
@@ -130,13 +130,14 @@ SOFTWARE.
 # endif
 #endif
 
-/// @c EMBED_CLANG_INLINE
-// Only used for Clang++
-#ifndef EMBED_CLANG_INLINE
-# if defined(__clang__)
-#  define EMBED_CLANG_INLINE __attribute__((always_inline))
+/// @c EMBED_INLINE
+#ifndef EMBED_INLINE
+# if defined(__GNUC__) || defined(__clang__)
+#  define EMBED_INLINE __attribute__((always_inline))
+# elif defined(_MSC_VER)
+#  define EMBED_INLINE __forceinline
 # else
-#  define EMBED_CLANG_INLINE
+#  define EMBED_INLINE inline
 # endif
 #endif
 
@@ -175,8 +176,9 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     };
   };
 
-  /// @c throw_bad_function_call
-  [[noreturn]] static inline void throw_bad_function_call()
+  /// @c _throw_bad_function_call
+  // For private use only.
+  [[noreturn]] static inline void _throw_bad_function_call()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
@@ -712,20 +714,25 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     friend class Fn;
 
   public:
+    // See https://en.cppreference.com/w/cpp/utility/functional/function.html
+    // Get the return type.
+    using result_type = RetType;
+
+  public:
 
     // Default destructor for embed::Fn.
     // Destroy the functor, call functor's destructor.
-    EMBED_CLANG_INLINE ~Fn() noexcept
+    EMBED_INLINE ~Fn() noexcept
     {
       if (M_manager)
         (void)M_manager(M_functor, M_functor, OP_destroy_functor);
     }
 
     // Create an empty function wrapper.
-    EMBED_CLANG_INLINE Fn() noexcept {}
+    EMBED_INLINE Fn() noexcept {}
 
     // Create an empty function wrapper.
-    EMBED_CLANG_INLINE Fn(std::nullptr_t) noexcept {}
+    EMBED_INLINE Fn(std::nullptr_t) noexcept {}
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
 
@@ -811,7 +818,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
-        Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, func);
+        Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
         M_manager = &Fn::MyManager<DecayFunctor>::M_manager;
         M_invoker = &Fn::MyInvoker<DecayFunctor>::M_invoke;
       }
@@ -847,7 +854,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
-        throw_bad_function_call(); /* throw exception */
+        _throw_bad_function_call(); /* throw exception */
     }
 #else
 
@@ -929,7 +936,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
-        Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, func);
+        Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
         M_manager = &Fn::MyManager<DecayFunctor>::M_manager;
       }
     }
@@ -974,7 +981,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         return invoker(M_functor, std::forward<ArgsType>(args)...);
       }
       else
-        throw_bad_function_call(); /* throw exception */
+        _throw_bad_function_call(); /* throw exception */
     }
 
 # if defined(__clang__)
@@ -987,7 +994,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     /// @deprecated operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
-    EMBED_CLANG_INLINE Fn& operator=(const Fn& fn) noexcept
+    EMBED_INLINE Fn& operator=(const Fn& fn) noexcept
     {
       Fn(fn).swap(*this);
       return *this;
@@ -995,7 +1002,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     /// @deprecated operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
-    EMBED_CLANG_INLINE Fn& operator=(Fn&& fn) noexcept
+    EMBED_INLINE Fn& operator=(Fn&& fn) noexcept
     {
       Fn(std::move(fn)).swap(*this);
       return *this;
@@ -1004,7 +1011,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @deprecated operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
     template <typename RetT, std::size_t OtherBufSize, typename... ArgsT>
-    EMBED_CLANG_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
+    EMBED_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
     noexcept(
       std::enable_if<
         FnTraits::is_similar_Fn<
@@ -1022,19 +1029,20 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// maybe copy/move constructor is better.
     template <typename Functor,
       typename DecayFunc = Fn::DecayFunc_t<Functor> >
-    EMBED_CLANG_INLINE Fn& operator=(Functor&& func) noexcept
+    EMBED_INLINE Fn& operator=(Functor&& func) noexcept
     {
       Fn(std::forward<Functor>(func)).swap(*this);
       return *this;
     }
 
     // check if the embed::Fn is empty.
-    bool is_empty() const noexcept
+    EMBED_INLINE bool is_empty() const noexcept
     {
       return static_cast<bool>( M_manager == nullptr );
     }
 
-    explicit operator bool() const noexcept
+    // `true` if the embed::Fn is not empty.
+    EMBED_INLINE explicit operator bool() const noexcept
     {
       return !is_empty();
     }

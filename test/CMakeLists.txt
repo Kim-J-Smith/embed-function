@@ -26,6 +26,11 @@ set_target_properties(
     CXX_STANDARD_REQUIRED ON
     CXX_EXTENSIONS OFF
 )
+target_compile_definitions(
+    ${PROJECT_NAME}
+    PRIVATE
+    EMBED_NO_WARNING=1
+)
 
 # Custom target to run tests and save results
 add_custom_target(

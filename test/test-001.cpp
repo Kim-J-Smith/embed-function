@@ -7,6 +7,26 @@ struct test_struct
     float f;
 };
 
+struct Test
+{
+    void operator()() noexcept
+    {
+        std::cout << "here is Test" << std::endl;
+    }
+
+    Test() = default;
+
+    Test(const Test& ) noexcept
+    {
+        std::cout << "copy construct" << std::endl;
+    }
+
+    Test(Test&& ) noexcept
+    {
+        std::cout << "move construct" << std::endl;
+    }
+};
+
 void print_hello() { std::cout << "hello" << std::endl; }
 
 int print_world(int a, int b, float c) {
@@ -34,6 +54,8 @@ void test_001()
 
     embed::function<void(const test_struct&)> fn5 = print_struct;
 
+    embed::function<void()> fn6 = Test{};
+
     int ret = 0;
     auto s = test_struct{11445, 3.14159};
 
@@ -42,6 +64,7 @@ void test_001()
     fn3(4, 5, 6.0f);
     ret = fn4(7, 8, 9);
     fn5(s);
+    fn6();
 
     std::cout << "ret = " << ret << std::endl;
     
