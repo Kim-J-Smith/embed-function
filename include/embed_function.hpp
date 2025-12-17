@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.1
+ * @version     1.0.2
  * 
  * @date        2025-12-6
  * 
@@ -144,7 +144,7 @@ SOFTWARE.
 // Header files
 #if EMBED_CXX_VERSION >= 201103L
 # include <cstddef> // std::size_t
-# include <utility> // std::move, std::forward
+# include <utility> // std::move, std::forward, std::addressof
 # include <new> // placement new
 # include <type_traits>
 # include <exception>
@@ -155,7 +155,7 @@ SOFTWARE.
 namespace embed EMBED_ABI_VISIBILITY(default)
 {
   // declare ahead
-  template <typename Signature, std::size_t BufSize = EMBED_FN_DEFAULT_BUF_SIZE>
+  template <typename Signature, std::size_t BufSize>
   class Fn;
 
   /**
@@ -462,20 +462,22 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     >::type { };
 
     /// @e invoke_r
-    template <typename RetType, typename Callable, typename... ArgsType>
-    static EMBED_CXX14_CONSTEXPR
+    template <typename RetType, typename Callee, typename... ArgsType>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<!std::is_void<RetType>::value, RetType>::type
-    invoke_r(Callable&& fn, ArgsType&&... args)
+    invoke_r(Callee&& fn, ArgsType&&... args)
     {
-      return std::forward<Callable>(fn)(std::forward<ArgsType>(args)...);
+      // The return type is not `void`.
+      return std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
     }
 
-    template <typename RetType, typename Callable, typename... ArgsType>
-    static EMBED_CXX14_CONSTEXPR
+    template <typename RetType, typename Callee, typename... ArgsType>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<std::is_void<RetType>::value>::type
-    invoke_r(Callable&& fn, ArgsType&&... args)
+    invoke_r(Callee&& fn, ArgsType&&... args)
     {
-      std::forward<Callable>(fn)(std::forward<ArgsType>(args)...);
+      // The return type is `void`.
+      std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
     }
 
     /// @e is_similar_Fn
@@ -1004,7 +1006,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(Fn&& fn) noexcept
     {
-      Fn(std::move(fn)).swap(*this);
+      if (this != std::addressof(fn))
+        Fn(std::move(fn)).swap(*this);
       return *this;
     }
 
