@@ -41,16 +41,30 @@ SOFTWARE.
 
 ////////////////////////////////////////////////////////////////
 
-/// @note User can customize following macros
-
-// the default buffer size for `embed::Fn`.
-#define EMBED_FN_DEFAULT_BUF_SIZE   (1 * sizeof(void*))
+/// @note User can customize following configs
 
 // need fast call or not (fast call consume more RAM)
 #define EMBED_FN_NEED_FAST_CALL     false
 
 // assert nothrow callable function
 #define EMBED_FN_NOTHROW_CALLABLE   false
+
+namespace embed
+{
+
+  // the default buffer size for `embed::Fn`.
+  constexpr decltype(sizeof(int)) _FnDefaultBufSize = (1 * sizeof(void*));
+
+  // the callback function to handle the `bad_function_call`
+  // when the C++ exception is disabled.
+  static inline void _bad_function_call_handler()
+  {
+    /// Your can deal with the `bad_function_call` here.
+    /// Or you can just ignore this function, use 
+    /// @e std::set_terminate instead.
+  }
+
+}
 
 ////////////////////////////////////////////////////////////////
 
@@ -183,6 +197,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
 #else
+    _bad_function_call_handler();
     std::terminate();
 #endif
   }
@@ -1083,7 +1098,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
    * @note It is encouraged to use `embed::function` instead of `embed::Fn`.
    * `embed::function` will automatically align the BufSize.
    */
-  template <typename Signature, std::size_t BufSize = EMBED_FN_DEFAULT_BUF_SIZE>
+  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
   using function = Fn<Signature, _FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
 
 } // end namespace embed
