@@ -159,7 +159,6 @@ namespace embed
 #if EMBED_CXX_VERSION >= 201103L
 # include <cstddef> // std::size_t
 # include <utility> // std::move, std::forward, std::addressof
-# include <new> // placement new
 # include <type_traits>
 # include <exception>
 #else
