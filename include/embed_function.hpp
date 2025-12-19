@@ -144,6 +144,15 @@ namespace embed
 # endif
 #endif
 
+/// @c EMBED_FN_CXX17_NOEXCEPT
+#ifndef EMBED_FN_CXX17_NOEXCEPT
+# if EMBED_CXX_VERSION >= 201703L && EMBED_FN_NOTHROW_CALLABLE && !EMBED_CXX_ENABLE_EXCEPTION
+#  define EMBED_FN_CXX17_NOEXCEPT noexcept
+# else
+#  define EMBED_FN_CXX17_NOEXCEPT
+# endif
+#endif
+
 /// @c EMBED_INLINE
 #ifndef EMBED_INLINE
 # if defined(__GNUC__) || defined(__clang__)
@@ -400,7 +409,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       using Caller = typename std::decay<Functor>::type&;
       using Result = invoke_result<Caller, ArgsT...>;
 
-#if ( EMBED_CXX_VERSION >= 201703L )
+#if ( EMBED_CXX_VERSION >= 201703L ) && (!EMBED_CXX_ENABLE_EXCEPTION)
       using NoThrow_call = typename std::integral_constant<
         bool, noexcept(std::declval<Caller>()(std::declval<ArgsT>()...))
       >::type;
@@ -958,6 +967,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Call the functor with type `ArgsType...` arguments.
     RetType operator() (ArgsType... args) const
+    EMBED_FN_CXX17_NOEXCEPT
     {
       if (M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
@@ -1081,6 +1091,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Call the functor with type `ArgsType...` arguments.
     RetType operator() (ArgsType... args) const
+    EMBED_FN_CXX17_NOEXCEPT
     {
       if (M_manager) {
         _FnFunctor<BufSize> nil;
@@ -1225,7 +1236,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   // Override for normal function.
   template <typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<RetType(ArgsType...)>
-  make_function(RetType (&func) (ArgsType...)) noexcept
+  make_function(RetType (&func) (ArgsType...) EMBED_FN_CXX17_NOEXCEPT) noexcept
   {
     return function<RetType(ArgsType...)>(func);
   }
@@ -1233,7 +1244,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   // Override for normal function with specified signature.
   template <typename Signature, typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<Signature>
-  make_function(RetType (&func) (ArgsType...)) noexcept
+  make_function(RetType (&func) (ArgsType...) EMBED_FN_CXX17_NOEXCEPT) noexcept
   {
     return function<Signature>(func);
   }
@@ -1297,6 +1308,11 @@ namespace std EMBED_ABI_VISIBILITY(default)
   ) noexcept { fn1.swap(fn2); }
 
 }
+
+
+#undef EMBED_FN_NEED_FAST_CALL
+#undef EMBED_FN_NOTHROW_CALLABLE
+#undef EMBED_FN_CXX17_NOEXCEPT
 
 #endif // EMBED_FUNCTION_HPP_
 
