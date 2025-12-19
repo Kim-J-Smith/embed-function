@@ -1,14 +1,16 @@
 # embed-function
 
-![Version - 0.1.1](https://img.shields.io/badge/Version-1.0.1-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
+![Version - 1.0.2](https://img.shields.io/badge/Version-1.0.2-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
 
 ![gcc-c++11/14/17/20/23 - passing](https://img.shields.io/badge/GCC_C++11/14/17/20/23-passing-3215911?style=flat) ![clang-c++11/14/17/20/23 - passing](https://img.shields.io/badge/Clang_C++11/14/17/20/23-passing-3215911?style=flat) ![msvc-c++14/17/20/23 - passing](https://img.shields.io/badge/MSVC_C++14/17/20/23-passing-3215911?style=flat)
 
-A very tiny C++ wrapper for callable object without any heap memory.
+A very tiny C++ wrapper for callable object **without any heap memory or exception**.
 
 ---
 
-## Usage
+## Basic Usage
+
+- normal function
 
 ```cpp
 #include "embed_function.hpp"
@@ -25,6 +27,8 @@ int main()
 
 ```
 
+- lambda function
+
 ```cpp
 #include "embed_function.hpp"
 #include <iostream>
@@ -38,6 +42,8 @@ int main()
 
 ```
 
+- callable object
+
 ```cpp
 #include "embed_function.hpp"
 #include <iostream>
@@ -46,7 +52,7 @@ int main()
 struct Test
 {
     std::string str;
-    void print() const
+    void operator()() const
     {
         std::cout << this->str << std::endl;
     }
@@ -55,9 +61,71 @@ struct Test
 int main()
 {
     Test t{"hello world"};
-    embed::function<void()> fn = [&t]() { t.print(); };
+    embed::function<void(), sizeof(std::string)> fn = t;
     fn();
     return 0;
 }
 
 ```
+
+## Use `embed::make_function`
+
+- Normal function
+
+```cpp
+#include "embed_function.hpp"
+#include <cstdio>
+
+void print_num(int num) { printf("hello %d", num); }
+
+int main()
+{
+    auto fn = embed::make_function(print_num);
+    fn(123);
+    return 0;
+}
+
+```
+
+- lambda function
+
+```cpp
+#include "embed_function.hpp"
+#include <iostream>
+
+int main()
+{
+    auto fn = embed::make_function(
+        []() { std::cout << "hello world" << std::endl; });
+    fn();
+    return 0;
+}
+
+```
+
+- callable object
+
+```cpp
+#include "embed_function.hpp"
+#include <iostream>
+#include <string>
+
+struct Test
+{
+    std::string str;
+    void operator()() const
+    {
+        std::cout << this->str << std::endl;
+    }
+};
+
+int main()
+{
+    Test t{"hello world"};
+    auto fn = embed::make_function(t);
+    fn();
+    return 0;
+}
+
+```
+
