@@ -56,12 +56,12 @@ namespace embed
   constexpr decltype(sizeof(int)) _FnDefaultBufSize = (1 * sizeof(void*));
 
   // the callback function to handle the `bad_function_call`
-  // when the C++ exception is disabled.
+  // only when the C++ exception is disabled.
   static inline void _bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
-    /// Or you can just ignore this function, use 
-    /// @e std::set_terminate instead.
+    /// Or you can just ignore this function, and use
+    /// @e `std::set_terminate` instead.
   }
 
 }
@@ -109,7 +109,7 @@ namespace embed
 #endif
 
 /// @brief warning if exception is enabled.
-#ifndef EMBED_NO_WARNING
+#if !EMBED_NO_WARNING
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  warning You are using c++ exception, which may consume more ROM.\
  Try use `-fno-exceptions` to disable the exception. Or if you exactly\
@@ -152,6 +152,17 @@ namespace embed
 #  define EMBED_INLINE __forceinline
 # else
 #  define EMBED_INLINE inline
+# endif
+#endif
+
+/// @c EMBED_NODISCARD
+#ifndef EMBED_NODISCARD
+# if EMBED_CXX_VERSION >= 201703L
+#  define EMBED_NODISCARD [[nodiscard]]
+# elif defined(__GNUC__) || defined(__clang__)
+#  define EMBED_NODISCARD __attribute__((warn_unused_result))
+# else
+#  define EMBED_NODISCARD
 # endif
 #endif
 
@@ -505,6 +516,43 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         && results_are_same<OtherRet, SelfRet>::value
         && ( SelfArgNum == OtherArgNum )
         && arguments_are_same<SelfArgs_package, OtherArgs_package, SelfArgNum>::value;
+    };
+
+    /// @e get_unique_call_signature_impl
+    template <typename Signature>
+    struct get_unique_call_signature_impl;
+
+    template <typename Ret, typename Functor, typename... ArgsType>
+    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...)>
+    { using type = Ret(ArgsType...); };
+
+    template <typename Ret, typename Functor, typename... ArgsType>
+    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const>
+    { using type = Ret(ArgsType...); };
+
+    /// @e is_unique_callable
+    template <typename Functor, bool = true, typename = void>
+    struct is_unique_callable
+    : public std::false_type
+    { };
+
+    template <typename Functor>
+    struct is_unique_callable<Functor, true, void_t<decltype(&Functor::operator())>>
+    : public std::true_type
+    { };
+
+    /// @e get_unique_call_signature
+    template <typename Functor, bool = is_unique_callable<Functor>::value>
+    struct get_unique_call_signature
+    {
+      using type = void; // unused
+    };
+
+    template <typename Functor>
+    struct get_unique_call_signature<Functor, true>
+    {
+      using type = typename
+        get_unique_call_signature_impl<decltype(&Functor::operator())>::type;
     };
 
   }; // end FnTraits
@@ -1100,12 +1148,56 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
   using function = Fn<Signature, _FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
 
-  // Make a function and automatically calculate the required size.
+  /**
+   * @brief Make a function and automatically calculate the required size.
+   * @note `embed::make_function` has many kinds of override function.
+   */
   template <typename Signature, typename Functor> 
   EMBED_NODISCARD inline function<Signature, sizeof(Functor)>
-  make_function(Functor&& func)
+  make_function(Functor&& func) noexcept
   {
     return function<Signature, sizeof(Functor)>(std::forward<Functor>(func));
+  }
+
+  // Override for empty.
+  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
+  EMBED_NODISCARD inline function<Signature, BufSize>
+  make_function() noexcept
+  { return function<Signature, BufSize>(); }
+
+  // Override for nullptr.
+  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
+  EMBED_NODISCARD inline function<Signature, BufSize>
+  make_function(std::nullptr_t) noexcept
+  { return function<Signature>(nullptr); }
+
+  // Override for normal function.
+  template <typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline function<RetType(ArgsType...)>
+  make_function(RetType (&func) (ArgsType...)) noexcept
+  {
+    return function<RetType(ArgsType...)>(func);
+  }
+
+  // Override for normal function with specified signature.
+  template <typename Signature, typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline function<Signature>
+  make_function(RetType (&func) (ArgsType...)) noexcept
+  {
+    return function<Signature>(func);
+  }
+
+  // Override for lambda function or other object which
+  // uniquely override the `operator()`.
+  template <typename Lambda,
+   typename Signature = typename _FnToolBox::FnTraits::get_unique_call_signature<Lambda>::type>
+  EMBED_NODISCARD inline typename std::enable_if<
+    _FnToolBox::FnTraits::is_unique_callable<Lambda>::value,
+    function<Signature, sizeof(Lambda)>
+  >::type
+  make_function(Lambda&& la) noexcept
+  {
+    return function<Signature, sizeof(Lambda)>(std::forward<Lambda>(la));
   }
 
 } // end namespace embed
