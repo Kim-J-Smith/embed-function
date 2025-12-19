@@ -1100,6 +1100,14 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
   using function = Fn<Signature, _FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
 
+  // Make a function and automatically calculate the required size.
+  template <typename Signature, typename Functor> 
+  EMBED_NODISCARD inline function<Signature, sizeof(Functor)>
+  make_function(Functor&& func)
+  {
+    return function<Signature, sizeof(Functor)>(std::forward<Functor>(func));
+  }
+
 } // end namespace embed
 
 // std::swap
