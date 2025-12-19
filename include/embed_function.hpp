@@ -555,6 +555,35 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         get_unique_call_signature_impl<decltype(&Functor::operator())>::type;
     };
 
+    /// @e unwrap_signature
+    template <typename Signature> struct unwrap_signature;
+
+    template <typename RetType, typename... ArgsType>
+    struct unwrap_signature<RetType(ArgsType...)>
+    {
+      using ret = RetType;
+      using args = args_package<ArgsType...>;
+      static constexpr std::size_t arg_num = sizeof... (ArgsType);
+    };
+
+    /// @e is_Fn_and_similar
+    template <typename Signature, typename Functor>
+    struct is_Fn_and_similar
+    : public std::false_type { };
+
+    template <typename Signature,
+      typename OtherRet, std::size_t BufSize, typename... OtherArgs>
+    struct is_Fn_and_similar<Signature, Fn<OtherRet(OtherArgs...), BufSize>>
+    {
+      static constexpr bool value = is_similar_Fn<
+          typename unwrap_signature<Signature>::ret,
+          typename unwrap_signature<Signature>::args,
+          unwrap_signature<Signature>::arg_num,
+          BufSize, OtherRet, args_package<OtherArgs...>,
+          sizeof... (OtherArgs), BufSize
+        >::value;
+    };
+
   }; // end FnTraits
 
 
@@ -1150,8 +1179,16 @@ namespace embed EMBED_ABI_VISIBILITY(default)
    * @brief Make a function and automatically calculate the required size.
    * @note `embed::make_function` has many kinds of override function.
    */
-  template <typename Signature, typename Functor> 
-  EMBED_NODISCARD inline function<Signature, sizeof(Functor)>
+  template <typename Signature, typename Functor>
+  EMBED_NODISCARD inline typename std::enable_if<
+    !_FnToolBox::FnTraits::is_Fn_and_similar<
+      Signature,
+      typename std::remove_const<
+        typename std::remove_reference<Functor>::type
+      >::type
+    >::value,
+    function<Signature, sizeof(Functor)>
+  >::type
   make_function(Functor&& func) noexcept
   {
     return function<Signature, sizeof(Functor)>(std::forward<Functor>(func));
@@ -1196,6 +1233,39 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   make_function(Lambda&& la) noexcept
   {
     return function<Signature, sizeof(Lambda)>(std::forward<Lambda>(la));
+  }
+
+  // Override for `embed::Fn`. (Copy)
+  template <typename Signature, std::size_t BufSize>
+  EMBED_NODISCARD inline function<Signature, BufSize>
+  make_function(const Fn<Signature, BufSize>& fn) noexcept
+  {
+    return function<Signature, BufSize>(fn);
+  }
+
+  // Override for `embed::Fn`. (Move)
+  template <typename Signature, std::size_t BufSize>
+  EMBED_NODISCARD inline function<Signature, BufSize>
+  make_function(Fn<Signature, BufSize>&& fn) noexcept
+  {
+    return function<Signature, BufSize>(std::move(fn));
+  }
+
+  // Override for `embed::Fn<Other, Size>`.
+  template <typename Signature, typename OtherRet, std::size_t BufSize, typename... OtherArgs>
+  EMBED_NODISCARD inline typename std::enable_if<
+    _FnToolBox::FnTraits::is_similar_Fn<
+      typename _FnToolBox::FnTraits::unwrap_signature<Signature>::ret,
+      typename _FnToolBox::FnTraits::unwrap_signature<Signature>::args,
+      _FnToolBox::FnTraits::unwrap_signature<Signature>::arg_num,
+      BufSize, OtherRet, _FnToolBox::FnTraits::args_package<OtherArgs...>,
+      sizeof... (OtherArgs), BufSize
+    >::value,
+    function<Signature, BufSize>
+  >::type
+  make_function(const Fn<OtherRet(OtherArgs...), BufSize>& fn) noexcept
+  {
+    return function<Signature, BufSize>(fn);
   }
 
 } // end namespace embed
