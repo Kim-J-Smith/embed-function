@@ -530,6 +530,22 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const>
     { using type = Ret(ArgsType...); };
 
+#if EMBED_CXX_VERSION >= 201703L
+
+    // See https://en.cppreference.com/w/cpp/language/noexcept_spec
+    // The noexcept-specification is a part of the function type and 
+    // may appear as part of any function declarator. (Since C++17)
+
+    template <typename Ret, typename Functor, typename... ArgsType>
+    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) noexcept>
+    { using type = Ret(ArgsType...); };
+
+    template <typename Ret, typename Functor, typename... ArgsType>
+    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const noexcept>
+    { using type = Ret(ArgsType...); };
+
+#endif
+
     /// @e is_unique_callable
     template <typename Functor, bool = true, typename = void>
     struct is_unique_callable
