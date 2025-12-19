@@ -9,7 +9,7 @@
 
 struct t2_001_multi_args_float_return
 {
-    float operator()(int a, int b, float c) const {
+    float operator()(int a, int b, float c) const noexcept {
     std::cout << "t2_001_multi_args_float_return " << a << ' ' << b << ' ' << c << std::endl;
     return 1.11;
     }
