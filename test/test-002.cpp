@@ -1,44 +1,79 @@
+// Test moving / copying / invoking embed::function
 #include <iostream>
 #include <functional>
 #include "embed_function.hpp"
 
-static float print_world(int a, int b, float c) {
+#define GREEN "\033[32m"
 
-    std::cout << "world " << a << ' ' << b << ' ' << c << std::endl;
+#define RESET "\033[0m"
+
+struct t2_001_multi_args_float_return
+{
+    float operator()(int a, int b, float c) const noexcept {
+    std::cout << "t2_001_multi_args_float_return " << a << ' ' << b << ' ' << c << std::endl;
     return 1.11;
-}
+    }
+
+    t2_001_multi_args_float_return() = default;
+
+    t2_001_multi_args_float_return(const t2_001_multi_args_float_return&) noexcept
+    {
+        std::cout << "Here is copy constructor" << std::endl;
+    }
+
+    t2_001_multi_args_float_return(t2_001_multi_args_float_return&&) noexcept
+    {
+        std::cout << "Here is move constructor" << std::endl;
+    }
+};
 
 void test_002()
 {
-    embed::function<int(int, int, float)> fn1 = print_world;
+    std::cout << "\n[START - test_002]\n" << std::endl;
 
-    // function<A> -> function<B>
-    embed::function<int(int, int, const float)> fn2 = fn1;
+    // Copy and move between embed::Fn
 
-    embed::function<int(int, const int, const float)> fn3 = std::move(fn2);
+    auto fn1 = embed::make_function(t2_001_multi_args_float_return{});
 
-    embed::function<void(int, long, double), 16> fn4 = fn3;
+    auto fn2 = embed::make_function(fn1);
 
-    embed::function<void(int, long, double), 16> fn5;
+    auto fn3 = fn1;
 
-    int ret = fn1(1, 2, 3.14f);
-    fn3(1, 2, 4.6677);
+    auto fn4 = embed::make_function<void(int, int, float)>(fn1);
 
-    std::swap(fn2, fn3);
-    fn2(1, 4, 5.0f);
-    fn4(1, 2, 3.1415926535);
+    auto fn5 = std::move(fn1);
 
-    try{
-        fn3(99, 98, 97.666);
-    }
-    catch(const std::exception& e) {
+    auto fn6 = embed::make_function<void()>();
+
+    std::swap(fn1, fn5);
+
+    fn5 = fn1;
+
+    auto fn7 = embed::make_function<float(const int, int, float)>(fn1);
+
+    std::cout << "sizeof(fn7) = " << sizeof(fn7) << std::endl;
+
+    embed::function<float(const int, int, float), 32> fn8 = fn1;
+
+    std::cout << "\n<test_002>: [BEGIN] Copy and move between embed::Fn" << std::endl;
+
+    fn1(0, 0, 1);
+    fn2(0, 0, 2);
+    fn3(0, 0, 3);
+    fn4(0, 0, 4);
+    fn5(0, 0, 5);
+
+    try {
+        fn6();
+    } catch(const std::exception& e) {
         std::cerr << e.what() << std::endl;
     }
 
-    fn5 = fn2;
-    fn5(1, 666, 777.0);
+    fn7(0, 0, 7);
+    fn8(0, 0, 8);
 
-    std::cout << "ret = " << ret << std::endl;
-    std::cout << "test - 002 finish" << std::endl;
+    std::cout << "<test_002>: [END] Copy and move between embed::Fn\n" << std::endl;
+
+    std::cout << "[END - test_002] : " GREEN "OK" RESET "\n\n" << std::endl;
 }
 

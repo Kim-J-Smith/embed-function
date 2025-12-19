@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.1
+ * @version     1.0.2
  * 
  * @date        2025-12-6
  * 
@@ -41,16 +41,30 @@ SOFTWARE.
 
 ////////////////////////////////////////////////////////////////
 
-/// @note User can customize following macros
-
-// the default buffer size for `embed::Fn`.
-#define EMBED_FN_DEFAULT_BUF_SIZE   (1 * sizeof(void*))
+/// @note User can customize following configs
 
 // need fast call or not (fast call consume more RAM)
 #define EMBED_FN_NEED_FAST_CALL     false
 
 // assert nothrow callable function
 #define EMBED_FN_NOTHROW_CALLABLE   false
+
+namespace embed
+{
+
+  // the default buffer size for `embed::Fn`.
+  constexpr decltype(sizeof(int)) _FnDefaultBufSize = (1 * sizeof(void*));
+
+  // the callback function to handle the `bad_function_call`
+  // only when the C++ exception is disabled.
+  static inline void _bad_function_call_handler()
+  {
+    /// Your can deal with the `bad_function_call` here.
+    /// Or you can just ignore this function, and use
+    /// @e `std::set_terminate` instead.
+  }
+
+}
 
 ////////////////////////////////////////////////////////////////
 
@@ -95,7 +109,7 @@ SOFTWARE.
 #endif
 
 /// @brief warning if exception is enabled.
-#ifndef EMBED_NO_WARNING
+#if !EMBED_NO_WARNING
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  warning You are using c++ exception, which may consume more ROM.\
  Try use `-fno-exceptions` to disable the exception. Or if you exactly\
@@ -130,6 +144,18 @@ SOFTWARE.
 # endif
 #endif
 
+/// @c EMBED_FN_CASE_NOEXCEPT
+/// @brief Only when C++ version is greater than C++17,
+/// c++ exception is disabled, and user need nothrow callable
+/// functor, @b EMBED_FN_CASE_NOEXCEPT will be defined as noexcept.
+#ifndef EMBED_FN_CASE_NOEXCEPT
+# if EMBED_CXX_VERSION >= 201703L && EMBED_FN_NOTHROW_CALLABLE && !EMBED_CXX_ENABLE_EXCEPTION
+#  define EMBED_FN_CASE_NOEXCEPT noexcept
+# else
+#  define EMBED_FN_CASE_NOEXCEPT
+# endif
+#endif
+
 /// @c EMBED_INLINE
 #ifndef EMBED_INLINE
 # if defined(__GNUC__) || defined(__clang__)
@@ -141,11 +167,21 @@ SOFTWARE.
 # endif
 #endif
 
+/// @c EMBED_NODISCARD
+#ifndef EMBED_NODISCARD
+# if EMBED_CXX_VERSION >= 201703L
+#  define EMBED_NODISCARD [[nodiscard]]
+# elif defined(__GNUC__) || defined(__clang__)
+#  define EMBED_NODISCARD __attribute__((warn_unused_result))
+# else
+#  define EMBED_NODISCARD
+# endif
+#endif
+
 // Header files
 #if EMBED_CXX_VERSION >= 201103L
 # include <cstddef> // std::size_t
-# include <utility> // std::move, std::forward
-# include <new> // placement new
+# include <utility> // std::move, std::forward, std::addressof
 # include <type_traits>
 # include <exception>
 #else
@@ -155,7 +191,7 @@ SOFTWARE.
 namespace embed EMBED_ABI_VISIBILITY(default)
 {
   // declare ahead
-  template <typename Signature, std::size_t BufSize = EMBED_FN_DEFAULT_BUF_SIZE>
+  template <typename Signature, std::size_t BufSize>
   class Fn;
 
   /**
@@ -183,6 +219,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
 #else
+    _bad_function_call_handler();
     std::terminate();
 #endif
   }
@@ -375,7 +412,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       using Caller = typename std::decay<Functor>::type&;
       using Result = invoke_result<Caller, ArgsT...>;
 
-#if ( EMBED_CXX_VERSION >= 201703L )
+#if ( EMBED_CXX_VERSION >= 201703L ) && (!EMBED_CXX_ENABLE_EXCEPTION)
       using NoThrow_call = typename std::integral_constant<
         bool, noexcept(std::declval<Caller>()(std::declval<ArgsT>()...))
       >::type;
@@ -462,20 +499,22 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     >::type { };
 
     /// @e invoke_r
-    template <typename RetType, typename Callable, typename... ArgsType>
-    static EMBED_CXX14_CONSTEXPR
+    template <typename RetType, typename Callee, typename... ArgsType>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<!std::is_void<RetType>::value, RetType>::type
-    invoke_r(Callable&& fn, ArgsType&&... args)
+    invoke_r(Callee&& fn, ArgsType&&... args)
     {
-      return std::forward<Callable>(fn)(std::forward<ArgsType>(args)...);
+      // The return type is not `void`.
+      return std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
     }
 
-    template <typename RetType, typename Callable, typename... ArgsType>
-    static EMBED_CXX14_CONSTEXPR
+    template <typename RetType, typename Callee, typename... ArgsType>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<std::is_void<RetType>::value>::type
-    invoke_r(Callable&& fn, ArgsType&&... args)
+    invoke_r(Callee&& fn, ArgsType&&... args)
     {
-      std::forward<Callable>(fn)(std::forward<ArgsType>(args)...);
+      // The return type is `void`.
+      std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
     }
 
     /// @e is_similar_Fn
@@ -489,6 +528,88 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         && results_are_same<OtherRet, SelfRet>::value
         && ( SelfArgNum == OtherArgNum )
         && arguments_are_same<SelfArgs_package, OtherArgs_package, SelfArgNum>::value;
+    };
+
+    /// @e get_unique_call_signature_impl
+    template <typename Signature>
+    struct get_unique_call_signature_impl;
+
+    template <typename Ret, typename Functor, typename... ArgsType>
+    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...)>
+    { using type = Ret(ArgsType...); };
+
+    template <typename Ret, typename Functor, typename... ArgsType>
+    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const>
+    { using type = Ret(ArgsType...); };
+
+#if EMBED_CXX_VERSION >= 201703L
+
+    // See https://en.cppreference.com/w/cpp/language/noexcept_spec
+    // The noexcept-specification is a part of the function type and 
+    // may appear as part of any function declarator. (Since C++17)
+
+    template <typename Ret, typename Functor, typename... ArgsType>
+    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) noexcept>
+    { using type = Ret(ArgsType...); };
+
+    template <typename Ret, typename Functor, typename... ArgsType>
+    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const noexcept>
+    { using type = Ret(ArgsType...); };
+
+#endif
+
+    /// @e is_unique_callable
+    template <typename Functor, bool = true, typename = void>
+    struct is_unique_callable
+    : public std::false_type
+    { };
+
+    template <typename Functor>
+    struct is_unique_callable<Functor, true, void_t<decltype(&Functor::operator())>>
+    : public std::true_type
+    { };
+
+    /// @e get_unique_call_signature
+    template <typename Functor, bool = is_unique_callable<Functor>::value>
+    struct get_unique_call_signature
+    {
+      using type = void; // unused
+    };
+
+    template <typename Functor>
+    struct get_unique_call_signature<Functor, true>
+    {
+      using type = typename
+        get_unique_call_signature_impl<decltype(&Functor::operator())>::type;
+    };
+
+    /// @e unwrap_signature
+    template <typename Signature> struct unwrap_signature;
+
+    template <typename RetType, typename... ArgsType>
+    struct unwrap_signature<RetType(ArgsType...)>
+    {
+      using ret = RetType;
+      using args = args_package<ArgsType...>;
+      static constexpr std::size_t arg_num = sizeof... (ArgsType);
+    };
+
+    /// @e is_Fn_and_similar
+    template <typename Signature, typename Functor>
+    struct is_Fn_and_similar
+    : public std::false_type { };
+
+    template <typename Signature,
+      typename OtherRet, std::size_t BufSize, typename... OtherArgs>
+    struct is_Fn_and_similar<Signature, Fn<OtherRet(OtherArgs...), BufSize>>
+    {
+      static constexpr bool value = is_similar_Fn<
+          typename unwrap_signature<Signature>::ret,
+          typename unwrap_signature<Signature>::args,
+          unwrap_signature<Signature>::arg_num,
+          BufSize, OtherRet, args_package<OtherArgs...>,
+          sizeof... (OtherArgs), BufSize
+        >::value;
     };
 
   }; // end FnTraits
@@ -768,17 +889,16 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
     // `Sig_A.args` are same with `Sig_B.args`.
     template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
-    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn)
-    noexcept(
-      std::enable_if<
+    Fn(
+      const Fn<OtherRet(OtherArgs...), OtherSize>& fn,
+      typename std::enable_if<
         FnTraits::is_similar_Fn<
           RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
           OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
         >::value,
-        std::true_type
-      >::type::value
-    )
-    {
+        bool
+      >::type = true
+    ) noexcept {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
@@ -850,6 +970,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Call the functor with type `ArgsType...` arguments.
     RetType operator() (ArgsType... args) const
+    EMBED_FN_CASE_NOEXCEPT
     {
       if (M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
@@ -887,17 +1008,16 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
     // `Sig_A.args` are same with `Sig_B.args`.
     template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
-    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn)
-    noexcept(
-      std::enable_if<
+    Fn(
+      const Fn<OtherRet(OtherArgs...), OtherSize>& fn,
+      typename std::enable_if<
         FnTraits::is_similar_Fn<
           RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
           OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
         >::value,
-        std::true_type
-      >::type::value
-    )
-    {
+        bool
+      >::type = true
+    ) noexcept {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
@@ -974,6 +1094,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     // Call the functor with type `ArgsType...` arguments.
     RetType operator() (ArgsType... args) const
+    EMBED_FN_CASE_NOEXCEPT
     {
       if (M_manager) {
         _FnFunctor<BufSize> nil;
@@ -1004,7 +1125,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(Fn&& fn) noexcept
     {
-      Fn(std::move(fn)).swap(*this);
+      if (this != std::addressof(fn))
+        Fn(std::move(fn)).swap(*this);
       return *this;
     }
 
@@ -1080,8 +1202,101 @@ namespace embed EMBED_ABI_VISIBILITY(default)
    * @note It is encouraged to use `embed::function` instead of `embed::Fn`.
    * `embed::function` will automatically align the BufSize.
    */
-  template <typename Signature, std::size_t BufSize = EMBED_FN_DEFAULT_BUF_SIZE>
+  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
   using function = Fn<Signature, _FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
+
+  /**
+   * @brief Make a function and automatically calculate the required size.
+   * @note `embed::make_function` has many kinds of override function.
+   */
+  template <typename Signature, typename Functor>
+  EMBED_NODISCARD inline typename std::enable_if<
+    !_FnToolBox::FnTraits::is_Fn_and_similar<
+      Signature,
+      typename std::remove_const<
+        typename std::remove_reference<Functor>::type
+      >::type
+    >::value,
+    function<Signature, sizeof(Functor)>
+  >::type
+  make_function(Functor&& func) noexcept
+  {
+    return function<Signature, sizeof(Functor)>(std::forward<Functor>(func));
+  }
+
+  // Override for empty.
+  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
+  EMBED_NODISCARD inline function<Signature, BufSize>
+  make_function() noexcept
+  { return function<Signature, BufSize>(); }
+
+  // Override for nullptr.
+  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
+  EMBED_NODISCARD inline function<Signature, BufSize>
+  make_function(std::nullptr_t) noexcept
+  { return function<Signature>(nullptr); }
+
+  // Override for normal function.
+  template <typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline function<RetType(ArgsType...)>
+  make_function(RetType (&func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
+  {
+    return function<RetType(ArgsType...)>(func);
+  }
+
+  // Override for normal function with specified signature.
+  template <typename Signature, typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline function<Signature>
+  make_function(RetType (&func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
+  {
+    return function<Signature>(func);
+  }
+
+  // Override for lambda function or other object which
+  // uniquely override the `operator()`.
+  template <typename Lambda,
+   typename Signature = typename _FnToolBox::FnTraits::get_unique_call_signature<Lambda>::type>
+  EMBED_NODISCARD inline typename std::enable_if<
+    _FnToolBox::FnTraits::is_unique_callable<Lambda>::value,
+    function<Signature, sizeof(Lambda)>
+  >::type
+  make_function(Lambda&& la) noexcept
+  {
+    return function<Signature, sizeof(Lambda)>(std::forward<Lambda>(la));
+  }
+
+  // Override for `embed::Fn`. (Copy)
+  template <typename Signature, std::size_t BufSize>
+  EMBED_NODISCARD inline function<Signature, BufSize>
+  make_function(const Fn<Signature, BufSize>& fn) noexcept
+  {
+    return function<Signature, BufSize>(fn);
+  }
+
+  // Override for `embed::Fn`. (Move)
+  template <typename Signature, std::size_t BufSize>
+  EMBED_NODISCARD inline function<Signature, BufSize>
+  make_function(Fn<Signature, BufSize>&& fn) noexcept
+  {
+    return function<Signature, BufSize>(std::move(fn));
+  }
+
+  // Override for `embed::Fn<Other, Size>`.
+  template <typename Signature, typename OtherRet, std::size_t BufSize, typename... OtherArgs>
+  EMBED_NODISCARD inline typename std::enable_if<
+    _FnToolBox::FnTraits::is_similar_Fn<
+      typename _FnToolBox::FnTraits::unwrap_signature<Signature>::ret,
+      typename _FnToolBox::FnTraits::unwrap_signature<Signature>::args,
+      _FnToolBox::FnTraits::unwrap_signature<Signature>::arg_num,
+      BufSize, OtherRet, _FnToolBox::FnTraits::args_package<OtherArgs...>,
+      sizeof... (OtherArgs), BufSize
+    >::value,
+    function<Signature, BufSize>
+  >::type
+  make_function(const Fn<OtherRet(OtherArgs...), BufSize>& fn) noexcept
+  {
+    return function<Signature, BufSize>(fn);
+  }
 
 } // end namespace embed
 
@@ -1096,6 +1311,11 @@ namespace std EMBED_ABI_VISIBILITY(default)
   ) noexcept { fn1.swap(fn2); }
 
 }
+
+
+#undef EMBED_FN_NEED_FAST_CALL
+#undef EMBED_FN_NOTHROW_CALLABLE
+#undef EMBED_FN_CASE_NOEXCEPT
 
 #endif // EMBED_FUNCTION_HPP_
 
