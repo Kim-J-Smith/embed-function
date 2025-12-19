@@ -832,17 +832,16 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
     // `Sig_A.args` are same with `Sig_B.args`.
     template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
-    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn)
-    noexcept(
-      std::enable_if<
+    Fn(
+      const Fn<OtherRet(OtherArgs...), OtherSize>& fn,
+      typename std::enable_if<
         FnTraits::is_similar_Fn<
           RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
           OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
         >::value,
-        std::true_type
-      >::type::value
-    )
-    {
+        bool
+      >::type = true
+    ) noexcept {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
@@ -951,17 +950,16 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
     // `Sig_A.args` are same with `Sig_B.args`.
     template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
-    Fn(const Fn<OtherRet(OtherArgs...), OtherSize>& fn)
-    noexcept(
-      std::enable_if<
+    Fn(
+      const Fn<OtherRet(OtherArgs...), OtherSize>& fn,
+      typename std::enable_if<
         FnTraits::is_similar_Fn<
           RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
           OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
         >::value,
-        std::true_type
-      >::type::value
-    )
-    {
+        bool
+      >::type = true
+    ) noexcept {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
