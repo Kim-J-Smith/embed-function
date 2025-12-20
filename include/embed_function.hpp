@@ -1255,9 +1255,14 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   // Override for lambda function or other object which
   // uniquely override the `operator()`.
   template <typename Lambda,
-   typename Signature = typename _FnToolBox::FnTraits::get_unique_call_signature<Lambda>::type>
+    typename ClassType = typename std::remove_const<
+      typename std::remove_reference<Lambda>::type
+    >::type,
+    typename Signature = typename 
+    _FnToolBox::FnTraits::get_unique_call_signature<ClassType>::type
+  >
   EMBED_NODISCARD inline typename std::enable_if<
-    _FnToolBox::FnTraits::is_unique_callable<Lambda>::value,
+    _FnToolBox::FnTraits::is_unique_callable<ClassType>::value,
     function<Signature, sizeof(Lambda)>
   >::type
   make_function(Lambda&& la) noexcept
