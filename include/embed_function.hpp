@@ -33,6 +33,30 @@ SOFTWARE.
  * @date        2025-12-6
  * 
  * @author      Kim-J-Smith
+ * 
+ * Wrapper for any callable object, including functor, normal function, lambda, etc.
+ * 
+ * Design intent is to do what `std::function` do but without
+ * allocation of heap memory, virtual function. Whats more, user
+ * can even disable the c++ exception to decrease ROM consumption.
+ * 
+ * The usage method of `embed::function` is almost exactly the same
+ * as that of `std::function`. If users are familiar with the operation
+ * of std::function, they can quickly get familiar with `embed::function`
+ * as well. embed::function ensures that no heap memory is used. 
+ * 
+ * By default, the space occupied by a single instance is only the size of
+ * 2 pointers. For larger lambda function objects, `embed::function`
+ * allows users to specify the second template parameter, that is, the
+ * buffer size to accommodate it (but such behavior is not recommended.
+ * It is a better choice to wrap it with a lambda function and then pass it in).
+ * 
+ * If the user does not disable the C++ exception system, they will receive
+ * a warning during the compilation process (this is merely a reminder and
+ * will not actually affect the compilation). The user needs to choose to disable
+ * C++ exceptions or to ignore this warning by defining a macro (the specific
+ * warning content will include more detailed instructions on how to handle it).
+ * 
  */
 
 /// @c C++11 "embed_function.hpp"
