@@ -45,6 +45,12 @@ SOFTWARE.
  * of std::function, they can quickly get familiar with `embed::function`
  * as well. embed::function ensures that no heap memory is used. 
  * 
+ * After careful consideration, `embed::function` does not plan to implement
+ * the `target_type()` and `target()` member functions. The main reason for 
+ * the former is that it relies on RTTI, which is often disabled in the embedded 
+ * domain. The latter is due to the reason of thread-safe access isolation
+ * (more details: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4159.pdf)
+ * 
  * By default, the space occupied by a single instance is only the size of
  * 2 pointers. For larger lambda function objects, `embed::function`
  * allows users to specify the second template parameter, that is, the
