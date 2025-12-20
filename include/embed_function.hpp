@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.2
+ * @version     1.0.3
  * 
  * @date        2025-12-6
  * 
@@ -839,6 +839,9 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     // Get the return type.
     using result_type = RetType;
 
+    // The `BufSize` of this embed::Fn object.
+    static constexpr std::size_t buffer_size = BufSize;
+
   public:
 
     // Default destructor for embed::Fn.
@@ -927,7 +930,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     Fn(Functor&& func) noexcept
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require Signature match Ret_Type");
+        "embed::Fn require the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
         "membed::Fn target must be copy-constructible");
@@ -1045,7 +1048,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     Fn(Functor&& func) noexcept
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require Signature match Ret_Type");
+        "embed::Fn require the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
         "membed::Fn target must be copy-constructible");
