@@ -86,6 +86,8 @@ namespace embed
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
     /// @e `std::set_terminate` instead.
+
+    std::terminate();
   }
 
 }
@@ -244,7 +246,6 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     throw bad_function_call();
 #else
     _bad_function_call_handler();
-    std::terminate();
 #endif
   }
 
