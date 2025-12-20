@@ -1267,7 +1267,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   // Override for normal function.
   template <typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<RetType(ArgsType...)>
-  make_function(RetType (&func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
+  make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
   {
     return function<RetType(ArgsType...)>(func);
   }
@@ -1275,7 +1275,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   // Override for normal function with specified signature.
   template <typename Signature, typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<Signature>
-  make_function(RetType (&func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
+  make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
   {
     return function<Signature>(func);
   }
