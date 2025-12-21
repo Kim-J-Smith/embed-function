@@ -96,8 +96,6 @@ namespace embed
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
     /// @e `std::set_terminate` instead.
-
-    std::terminate();
   }
 
 }
@@ -259,6 +257,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     throw bad_function_call();
 #else
     _bad_function_call_handler();
+    std::terminate(); // Abort all
 #endif
   }
 
@@ -1020,7 +1019,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
-        _throw_bad_function_call(); /* throw exception */
+        _throw_bad_function_call(); /* may throw exception */
     }
 #else
 
@@ -1147,7 +1146,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         return invoker(M_functor, std::forward<ArgsType>(args)...);
       }
       else
-        _throw_bad_function_call(); /* throw exception */
+        _throw_bad_function_call(); /* may throw exception */
     }
 
 # if defined(__clang__)
