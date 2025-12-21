@@ -1158,7 +1158,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 #endif // End EMBED_FN_NEED_FAST_CALL == true or not
 
-    /// @deprecated operator= may cunsume more resource,
+    /// @attention operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(const Fn& fn) noexcept
     {
@@ -1166,7 +1166,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @deprecated operator= may cunsume more resource,
+    /// @attention operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(Fn&& fn) noexcept
     {
@@ -1175,7 +1175,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @deprecated operator= may cunsume more resource,
+    /// @attention operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
     template <typename RetT, std::size_t OtherBufSize, typename... ArgsT>
     EMBED_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
@@ -1192,7 +1192,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @deprecated operator= may cunsume more resource,
+    /// @attention operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
     template <typename Functor,
       typename DecayFunc = Fn::DecayFunc_t<Functor> >
