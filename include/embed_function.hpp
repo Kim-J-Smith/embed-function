@@ -891,8 +891,26 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
   public:
 
-    // Default destructor for embed::Fn.
-    // Destroy the functor, call functor's destructor.
+    /**
+     * @brief Destroy the functor, call functor's destructor.
+     * 
+     * @attention 
+     * 
+     * @b GCC: Due to the more conservative strategy
+     * choice of GCC, even if `M_manager` can be determined
+     * as `nullptr` during compilation and will not be modified,
+     * GCC still chooses to retain the entire destructor code.
+     * 
+     * This also means that: even if the `embed::Fn` instance is
+     * empty and unused, GCC must reserve stack space for it
+     * which is to be used by the non-optimizable destructor.
+     * 
+     * @b MSVC: Same as GCC.
+     * 
+     * @b Clang: The Clang compiler is capable of detecting empty
+     * and unused `embed::Fn` instances and completely eliminating
+     * the destructors and stack space of the objects.
+     */
     EMBED_INLINE ~Fn() noexcept
     {
       if (M_manager)
