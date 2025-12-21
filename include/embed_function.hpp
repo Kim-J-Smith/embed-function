@@ -444,6 +444,10 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       using Result = invoke_result<Caller, ArgsT...>;
 
 #if ( EMBED_CXX_VERSION >= 201703L ) && (!EMBED_CXX_ENABLE_EXCEPTION)
+      // The noexcept-specification is a part of the function type 
+      // and may appear as part of any function declarator.
+      // And only when `EMBED_CXX_ENABLE_EXCEPTION` is false,
+      // embed::Fn::operator() can be `noexcept`.
       using NoThrow_call = typename std::integral_constant<
         bool, noexcept(std::declval<Caller>()(std::declval<ArgsT>()...))
       >::type;
@@ -1258,19 +1262,19 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<Signature, sizeof(Functor)>(std::forward<Functor>(func));
   }
 
-  // Override for empty.
+  // Overload for empty.
   template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function() noexcept
   { return function<Signature, BufSize>(); }
 
-  // Override for nullptr.
+  // Overload for nullptr.
   template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function(std::nullptr_t) noexcept
   { return function<Signature>(nullptr); }
 
-  // Override for normal function.
+  // Overload for normal function.
   template <typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<RetType(ArgsType...)>
   make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
@@ -1278,7 +1282,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<RetType(ArgsType...)>(func);
   }
 
-  // Override for normal function with specified signature.
+  // Overload for normal function with specified signature.
   template <typename Signature, typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<Signature>
   make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
@@ -1286,7 +1290,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<Signature>(func);
   }
 
-  // Override for lambda function or other object which
+  // Overload for lambda function or other object which
   // uniquely override the `operator()`.
   template <typename Lambda,
     typename ClassType = typename std::remove_const<
@@ -1304,7 +1308,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<Signature, sizeof(Lambda)>(std::forward<Lambda>(la));
   }
 
-  // Override for `embed::Fn`. (Copy)
+  // Overload for `embed::Fn`. (Copy)
   template <typename Signature, std::size_t BufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function(const Fn<Signature, BufSize>& fn) noexcept
@@ -1312,7 +1316,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<Signature, BufSize>(fn);
   }
 
-  // Override for `embed::Fn`. (Move)
+  // Overload for `embed::Fn`. (Move)
   template <typename Signature, std::size_t BufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function(Fn<Signature, BufSize>&& fn) noexcept
@@ -1320,7 +1324,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<Signature, BufSize>(std::move(fn));
   }
 
-  // Override for `embed::Fn<Other, Size>`.
+  // Overload for `embed::Fn<Other, Size>`.
   template <typename Signature, typename OtherRet, std::size_t BufSize, typename... OtherArgs>
   EMBED_NODISCARD inline typename std::enable_if<
     _FnToolBox::FnTraits::is_similar_Fn<
