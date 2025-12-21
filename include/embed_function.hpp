@@ -148,9 +148,15 @@ namespace embed
 /// @brief warning if exception is enabled.
 #if !EMBED_NO_WARNING
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
-#  warning You are using c++ exception, which may consume more ROM.\
+#  if defined(_MSC_VER)
+#   pragma message("[WARNING]: You are using c++ exception, which may consume more ROM.\
+ Try not use `/EHsc`, `/EHa` or `/EHs` to disable the exception. Or if you exactly\
+ want to enable the exception, then please use `/D EMBED_NO_WARNING=1` to ignore this warning.")
+#  else
+#   warning You are using c++ exception, which may consume more ROM.\
  Try use `-fno-exceptions` to disable the exception. Or if you exactly\
  want to enable the exception, then please use `-DEMBED_NO_WARNING=1` to ignore this warning.
+#  endif
 # endif
 #endif
 
