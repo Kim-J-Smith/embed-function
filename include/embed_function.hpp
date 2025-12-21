@@ -69,6 +69,10 @@ SOFTWARE.
 #ifndef EMBED_FUNCTION_HPP_
 #define EMBED_FUNCTION_HPP_
 
+#if defined(_MSC_VER)
+# pragma warning(push)
+# pragma warning(disable: 4514)
+#endif
 ////////////////////////////////////////////////////////////////
 
 /// @note User can customize following configs
@@ -99,6 +103,9 @@ namespace embed
 }
 
 ////////////////////////////////////////////////////////////////
+#if defined(_MSC_VER)
+# pragma warning(pop)
+#endif
 
 /// @c EMBED_CXX_VERSION
 #ifndef EMBED_CXX_VERSION
