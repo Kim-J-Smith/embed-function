@@ -40,6 +40,27 @@ struct t1_006_unique_callable {
     }
 };
 
+void t1_007_override_func(int a) {
+    printf("Here is override function, a=%d\n", a);
+}
+
+void t1_007_override_func(int a, float b) {
+    printf("Here is override function, a=%d, b=%f\n", a,b);
+}
+
+struct t1_008_struct_02 {
+    t1_008_struct_02(int a)
+    {
+        this->a = a;
+    }
+    int a{};
+};
+
+t1_008_struct_02 t1_009_return_a_class(int a) {
+    printf("Here is return class function, a=%d\n", a);
+    return t1_008_struct_02(a);
+}
+
 void test_001()
 {
     std::cout << "\n[START - test_001]\n" << std::endl;
@@ -71,7 +92,7 @@ void test_001()
     fn1();
     auto tmp_2 = fn2();
     fn3(1);
-    fn4(1, 3.14, 5.44, 'A');
+    fn4(1, 3.14f, 5.44, 'A');
     fn5();
     fn6();
     auto tmp_7 = fn7(1, 3.1415f, 2.7, 'B');
@@ -86,6 +107,10 @@ void test_001()
     std::cout << "<test_001>: [END] Strict and accurate type signatures\n" << std::endl; // Strict and accurate type signatures end
 
     // Not strict type signature
+#if defined(_MSC_VER)
+# pragma warning(push)
+# pragma warning(disable: 4244 4242 4305)
+#endif
 
     embed::function<void()> fn20 = t1_002_return_function;
 
@@ -128,6 +153,16 @@ void test_001()
 
     auto fn39 = embed::make_function(t1_006_unique_callable{});
 
+    auto fn40 = embed::make_function(static_cast<void(*)(int)>(t1_007_override_func));
+
+    auto fn41 = embed::make_function(static_cast<void(&)(int)>(t1_007_override_func));
+
+    auto fn42 = embed::make_function(static_cast<void(*)(int,float)>(t1_007_override_func));
+
+    auto fn43 = embed::make_function(static_cast<void(&)(int,float)>(t1_007_override_func));
+
+    auto fn44 = embed::make_function(t1_009_return_a_class);
+
     std::cout << "<test_001>: [BEGIN] Test the `make_function`" << std::endl;
 
     fn30();
@@ -140,6 +175,11 @@ void test_001()
     fn37('G', 4321);
     auto tmp_38 = fn38('H', 1234);
     fn39(313);
+    fn40(40);
+    fn41(41);
+    fn42(42, 4200.1);
+    fn43(43, 4300.1);
+    fn44(44);
 
     std::cout << "fn33() = " << tmp_33 << std::endl;
     std::cout << "fn38() = " << tmp_38 << std::endl;
@@ -147,5 +187,8 @@ void test_001()
     std::cout << "<test_001>: [END] Test the `make_function`\n" << std::endl;
 
     std::cout << "[END - test_001] : " GREEN "OK" RESET "\n\n" << std::endl;
+#if defined(_MSC_VER)
+# pragma warning(pop)
+#endif
 }
 
