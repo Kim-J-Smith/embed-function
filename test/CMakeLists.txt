@@ -49,5 +49,14 @@ if(MSVC)
     /Zc:preprocessor
     /sdl
     /permissive-
+    /W4
+    /Wall
+  )
+else()
+  target_compile_options(
+    ${PROJECT_NAME} PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
   )
 endif()

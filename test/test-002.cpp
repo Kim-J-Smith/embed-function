@@ -11,7 +11,7 @@ struct t2_001_multi_args_float_return
 {
     float operator()(int a, int b, float c) const noexcept {
     std::cout << "t2_001_multi_args_float_return " << a << ' ' << b << ' ' << c << std::endl;
-    return 1.11;
+    return 1.11f;
     }
 
     t2_001_multi_args_float_return() = default;
@@ -25,6 +25,8 @@ struct t2_001_multi_args_float_return
     {
         std::cout << "Here is move constructor" << std::endl;
     }
+
+    void operator=(const t2_001_multi_args_float_return&) = delete;
 };
 
 void test_002()
@@ -51,9 +53,15 @@ void test_002()
 
     auto fn7 = embed::make_function<float(const int, int, float)>(fn1);
 
-    std::cout << "sizeof(fn7) = " << sizeof(fn7) << std::endl;
+    std::cout << "fn7.buffer_size = " << fn7.buffer_size << std::endl;
 
     embed::function<float(const int, int, float), 32> fn8 = fn1;
+
+    t2_001_multi_args_float_return t;
+
+    auto fn9 = embed::make_function(t);
+
+    auto fn10 = make_function(fn9); // ADL
 
     std::cout << "\n<test_002>: [BEGIN] Copy and move between embed::Fn" << std::endl;
 
@@ -63,14 +71,18 @@ void test_002()
     fn4(0, 0, 4);
     fn5(0, 0, 5);
 
+#if EMBED_CXX_ENABLE_EXCEPTION
     try {
         fn6();
     } catch(const std::exception& e) {
         std::cerr << e.what() << std::endl;
     }
+#endif
 
     fn7(0, 0, 7);
     fn8(0, 0, 8);
+    fn9(0, 0, 9);
+    fn10(0, 0, 10);
 
     std::cout << "<test_002>: [END] Copy and move between embed::Fn\n" << std::endl;
 

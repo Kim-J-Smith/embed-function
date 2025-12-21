@@ -28,17 +28,51 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.2
+ * @version     1.0.3
  * 
  * @date        2025-12-6
  * 
  * @author      Kim-J-Smith
+ * 
+ * Wrapper for any callable object, including functor, normal function, lambda, etc.
+ * 
+ * Design intent is to do what `std::function` do but without
+ * allocation of heap memory, virtual function. Whats more, user
+ * can even disable the c++ exception to decrease ROM consumption.
+ * 
+ * The usage method of `embed::function` is almost exactly the same
+ * as that of `std::function`. If users are familiar with the operation
+ * of std::function, they can quickly get familiar with `embed::function`
+ * as well. embed::function ensures that no heap memory is used. 
+ * 
+ * After careful consideration, `embed::function` does not plan to implement
+ * the `target_type()` and `target()` member functions. The main reason for 
+ * the former is that it relies on RTTI, which is often disabled in the embedded 
+ * domain. The latter is due to the reason of thread-safe access isolation
+ * (more details: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4159.pdf)
+ * 
+ * By default, the space occupied by a single instance is only the size of
+ * 2 pointers. For larger lambda function objects, `embed::function`
+ * allows users to specify the second template parameter, that is, the
+ * buffer size to accommodate it (but such behavior is not recommended.
+ * It is a better choice to wrap it with a lambda function and then pass it in).
+ * 
+ * If the user does not disable the C++ exception system, they will receive
+ * a warning during the compilation process (this is merely a reminder and
+ * will not actually affect the compilation). The user needs to choose to disable
+ * C++ exceptions or to ignore this warning by defining a macro (the specific
+ * warning content will include more detailed instructions on how to handle it).
+ * 
  */
 
 /// @c C++11 "embed_function.hpp"
 #ifndef EMBED_FUNCTION_HPP_
 #define EMBED_FUNCTION_HPP_
 
+#if defined(_MSC_VER)
+# pragma warning(push)
+# pragma warning(disable: 4514)
+#endif
 ////////////////////////////////////////////////////////////////
 
 /// @note User can customize following configs
@@ -67,6 +101,9 @@ namespace embed
 }
 
 ////////////////////////////////////////////////////////////////
+#if defined(_MSC_VER)
+# pragma warning(pop)
+#endif
 
 /// @c EMBED_CXX_VERSION
 #ifndef EMBED_CXX_VERSION
@@ -111,9 +148,15 @@ namespace embed
 /// @brief warning if exception is enabled.
 #if !EMBED_NO_WARNING
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
-#  warning You are using c++ exception, which may consume more ROM.\
+#  if defined(_MSC_VER)
+#   pragma message("[WARNING]: You are using c++ exception, which may consume more ROM.\
+ Try not use `/EHsc`, `/EHa` or `/EHs` to disable the exception. Or if you exactly\
+ want to enable the exception, then please use `/D EMBED_NO_WARNING=1` to ignore this warning.")
+#  else
+#   warning You are using c++ exception, which may consume more ROM.\
  Try use `-fno-exceptions` to disable the exception. Or if you exactly\
  want to enable the exception, then please use `-DEMBED_NO_WARNING=1` to ignore this warning.
+#  endif
 # endif
 #endif
 
@@ -220,7 +263,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     throw bad_function_call();
 #else
     _bad_function_call_handler();
-    std::terminate();
+    std::terminate(); // Abort all
 #endif
   }
 
@@ -413,6 +456,10 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       using Result = invoke_result<Caller, ArgsT...>;
 
 #if ( EMBED_CXX_VERSION >= 201703L ) && (!EMBED_CXX_ENABLE_EXCEPTION)
+      // The noexcept-specification is a part of the function type 
+      // and may appear as part of any function declarator.
+      // And only when `EMBED_CXX_ENABLE_EXCEPTION` is false,
+      // embed::Fn::operator() can be `noexcept`.
       using NoThrow_call = typename std::integral_constant<
         bool, noexcept(std::declval<Caller>()(std::declval<ArgsT>()...))
       >::type;
@@ -839,10 +886,31 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     // Get the return type.
     using result_type = RetType;
 
+    // The `BufSize` of this embed::Fn object.
+    static constexpr std::size_t buffer_size = BufSize;
+
   public:
 
-    // Default destructor for embed::Fn.
-    // Destroy the functor, call functor's destructor.
+    /**
+     * @brief Destroy the functor, call functor's destructor.
+     * 
+     * @attention 
+     * 
+     * @b GCC: Due to the more conservative strategy
+     * choice of GCC, even if `M_manager` can be determined
+     * as `nullptr` during compilation and will not be modified,
+     * GCC still chooses to retain the entire destructor code.
+     * 
+     * This also means that: even if the `embed::Fn` instance is
+     * empty and unused, GCC must reserve stack space for it
+     * which is to be used by the non-optimizable destructor.
+     * 
+     * @b MSVC: Same as GCC.
+     * 
+     * @b Clang: The Clang compiler is capable of detecting empty
+     * and unused `embed::Fn` instances and completely eliminating
+     * the destructors and stack space of the objects.
+     */
     EMBED_INLINE ~Fn() noexcept
     {
       if (M_manager)
@@ -927,7 +995,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     Fn(Functor&& func) noexcept
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require Signature match Ret_Type");
+        "embed::Fn require the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
         "membed::Fn target must be copy-constructible");
@@ -975,7 +1043,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
-        _throw_bad_function_call(); /* throw exception */
+        _throw_bad_function_call(); /* may throw exception */
     }
 #else
 
@@ -1045,7 +1113,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     Fn(Functor&& func) noexcept
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require Signature match Ret_Type");
+        "embed::Fn require the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
         "membed::Fn target must be copy-constructible");
@@ -1102,7 +1170,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         return invoker(M_functor, std::forward<ArgsType>(args)...);
       }
       else
-        _throw_bad_function_call(); /* throw exception */
+        _throw_bad_function_call(); /* may throw exception */
     }
 
 # if defined(__clang__)
@@ -1113,7 +1181,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 #endif // End EMBED_FN_NEED_FAST_CALL == true or not
 
-    /// @deprecated operator= may cunsume more resource,
+    /// @attention operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(const Fn& fn) noexcept
     {
@@ -1121,7 +1189,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @deprecated operator= may cunsume more resource,
+    /// @attention operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(Fn&& fn) noexcept
     {
@@ -1130,7 +1198,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @deprecated operator= may cunsume more resource,
+    /// @attention operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
     template <typename RetT, std::size_t OtherBufSize, typename... ArgsT>
     EMBED_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
@@ -1147,7 +1215,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @deprecated operator= may cunsume more resource,
+    /// @attention operator= may cunsume more resource,
     /// maybe copy/move constructor is better.
     template <typename Functor,
       typename DecayFunc = Fn::DecayFunc_t<Functor> >
@@ -1224,40 +1292,45 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<Signature, sizeof(Functor)>(std::forward<Functor>(func));
   }
 
-  // Override for empty.
+  // Overload for empty.
   template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function() noexcept
   { return function<Signature, BufSize>(); }
 
-  // Override for nullptr.
+  // Overload for nullptr.
   template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function(std::nullptr_t) noexcept
   { return function<Signature>(nullptr); }
 
-  // Override for normal function.
+  // Overload for normal function.
   template <typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<RetType(ArgsType...)>
-  make_function(RetType (&func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
+  make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
   {
     return function<RetType(ArgsType...)>(func);
   }
 
-  // Override for normal function with specified signature.
+  // Overload for normal function with specified signature.
   template <typename Signature, typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<Signature>
-  make_function(RetType (&func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
+  make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
   {
     return function<Signature>(func);
   }
 
-  // Override for lambda function or other object which
+  // Overload for lambda function or other object which
   // uniquely override the `operator()`.
   template <typename Lambda,
-   typename Signature = typename _FnToolBox::FnTraits::get_unique_call_signature<Lambda>::type>
+    typename ClassType = typename std::remove_const<
+      typename std::remove_reference<Lambda>::type
+    >::type,
+    typename Signature = typename 
+    _FnToolBox::FnTraits::get_unique_call_signature<ClassType>::type
+  >
   EMBED_NODISCARD inline typename std::enable_if<
-    _FnToolBox::FnTraits::is_unique_callable<Lambda>::value,
+    _FnToolBox::FnTraits::is_unique_callable<ClassType>::value,
     function<Signature, sizeof(Lambda)>
   >::type
   make_function(Lambda&& la) noexcept
@@ -1265,7 +1338,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<Signature, sizeof(Lambda)>(std::forward<Lambda>(la));
   }
 
-  // Override for `embed::Fn`. (Copy)
+  // Overload for `embed::Fn`. (Copy)
   template <typename Signature, std::size_t BufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function(const Fn<Signature, BufSize>& fn) noexcept
@@ -1273,7 +1346,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<Signature, BufSize>(fn);
   }
 
-  // Override for `embed::Fn`. (Move)
+  // Overload for `embed::Fn`. (Move)
   template <typename Signature, std::size_t BufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function(Fn<Signature, BufSize>&& fn) noexcept
@@ -1281,7 +1354,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<Signature, BufSize>(std::move(fn));
   }
 
-  // Override for `embed::Fn<Other, Size>`.
+  // Overload for `embed::Fn<Other, Size>`.
   template <typename Signature, typename OtherRet, std::size_t BufSize, typename... OtherArgs>
   EMBED_NODISCARD inline typename std::enable_if<
     _FnToolBox::FnTraits::is_similar_Fn<
