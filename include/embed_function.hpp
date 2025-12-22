@@ -1377,9 +1377,17 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 } // end namespace embed
 
+#if defined(EMBED_NO_STD_HEADER)
+# undef std
+# define EMBED_STD_NAMESPACE_BEGIN namespace embed { namespace _fn_no_std {
+# define EMBED_STD_NAMESPACE_END } }
+#else
+# define EMBED_STD_NAMESPACE_BEGIN namespace std EMBED_ABI_VISIBILITY(default) {
+# define EMBED_STD_NAMESPACE_BEGIN }
+#endif
+
 // std::swap
-namespace std EMBED_ABI_VISIBILITY(default)
-{
+EMBED_STD_NAMESPACE_BEGIN
 
   template<typename Signature, size_t BufSize>
   inline void swap(
@@ -1387,19 +1395,17 @@ namespace std EMBED_ABI_VISIBILITY(default)
     embed::Fn<Signature, BufSize>& fn2
   ) noexcept { fn1.swap(fn2); }
 
-}
+EMBED_STD_NAMESPACE_END
 
 
 #undef EMBED_FN_NEED_FAST_CALL
 #undef EMBED_FN_NOTHROW_CALLABLE
 #undef EMBED_FN_CASE_NOEXCEPT
+#undef EMBED_STD_NAMESPACE_BEGIN
+#undef EMBED_STD_NAMESPACE_END
 
 #if defined(_MSC_VER)
 # pragma warning(pop)
-#endif
-
-#if defined(EMBED_NO_STD_HEADER)
-#undef std
 #endif
 
 #endif // EMBED_FUNCTION_HPP_
