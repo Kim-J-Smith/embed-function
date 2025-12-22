@@ -71,7 +71,7 @@ SOFTWARE.
 
 #if defined(_MSC_VER)
 # pragma warning(push)
-# pragma warning(disable: 4514 4668 4577 4005)
+# pragma warning(disable: 4514 4668 4577 4005 4180)
 #endif
 ////////////////////////////////////////////////////////////////
 
@@ -199,7 +199,7 @@ namespace embed
 /// @c EMBED_INLINE
 #ifndef EMBED_INLINE
 # if defined(__GNUC__) || defined(__clang__)
-#  define EMBED_INLINE __attribute__((always_inline))
+#  define EMBED_INLINE __attribute__((always_inline)) inline
 # elif defined(_MSC_VER)
 #  define EMBED_INLINE __forceinline
 # else
@@ -220,10 +220,17 @@ namespace embed
 
 // Header files
 #if EMBED_CXX_VERSION >= 201103L
-# include <cstddef> // std::size_t
-# include <utility> // std::move, std::forward, std::addressof
-# include <type_traits>
-# include <exception>
+# ifndef EMBED_NO_STD_HEADER
+#  include <cstddef> // std::size_t
+#  include <utility> // std::move, std::forward, std::addressof
+#  include <type_traits>
+#  include <exception>
+# else
+/// @brief In some extreme cases, users cannot use standard header files.
+/// Here, alternative solutions are provided.
+#  include "embed_function_nostd.hpp"
+#  define std _fn_no_std
+# endif
 #else
 # error embed_func need C++11 or greater version, try use '-std=c++11'.
 #endif
@@ -1389,6 +1396,10 @@ namespace std EMBED_ABI_VISIBILITY(default)
 
 #if defined(_MSC_VER)
 # pragma warning(pop)
+#endif
+
+#if defined(EMBED_NO_STD_HEADER)
+#undef std
 #endif
 
 #endif // EMBED_FUNCTION_HPP_
