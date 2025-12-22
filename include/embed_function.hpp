@@ -1379,23 +1379,19 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 #if defined(EMBED_NO_STD_HEADER)
 # undef std
-# define EMBED_STD_NAMESPACE_BEGIN namespace embed { namespace _fn_no_std {
-# define EMBED_STD_NAMESPACE_END } }
-#else
-# define EMBED_STD_NAMESPACE_BEGIN namespace std EMBED_ABI_VISIBILITY(default) {
-# define EMBED_STD_NAMESPACE_BEGIN }
 #endif
 
 // std::swap
-EMBED_STD_NAMESPACE_BEGIN
+namespace std EMBED_ABI_VISIBILITY(default)
+{
 
-  template<typename Signature, size_t BufSize>
+  template<typename Signature, decltype(sizeof(int)) BufSize>
   inline void swap(
     embed::Fn<Signature, BufSize>& fn1,
     embed::Fn<Signature, BufSize>& fn2
   ) noexcept { fn1.swap(fn2); }
 
-EMBED_STD_NAMESPACE_END
+}
 
 
 #undef EMBED_FN_NEED_FAST_CALL
