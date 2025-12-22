@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.3
+ * @version     1.0.4
  * 
  * @date        2025-12-6
  * 
@@ -71,7 +71,7 @@ SOFTWARE.
 
 #if defined(_MSC_VER)
 # pragma warning(push)
-# pragma warning(disable: 4514)
+# pragma warning(disable: 4514 4668 4577 4005)
 #endif
 ////////////////////////////////////////////////////////////////
 
@@ -101,9 +101,6 @@ namespace embed
 }
 
 ////////////////////////////////////////////////////////////////
-#if defined(_MSC_VER)
-# pragma warning(pop)
-#endif
 
 /// @c EMBED_CXX_VERSION
 #ifndef EMBED_CXX_VERSION
@@ -150,7 +147,7 @@ namespace embed
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  if defined(_MSC_VER)
 #   pragma message("[WARNING]: You are using c++ exception, which may consume more ROM.\
- Try not use `/EHsc`, `/EHa` or `/EHs` to disable the exception. Or if you exactly\
+ Try not use `/EHs-c- /D _HAS_EXCEPTIONS=0 /wd4577` to disable the exception. Or if you exactly\
  want to enable the exception, then please use `/D EMBED_NO_WARNING=1` to ignore this warning.")
 #  else
 #   warning You are using c++ exception, which may consume more ROM.\
@@ -1389,6 +1386,10 @@ namespace std EMBED_ABI_VISIBILITY(default)
 #undef EMBED_FN_NEED_FAST_CALL
 #undef EMBED_FN_NOTHROW_CALLABLE
 #undef EMBED_FN_CASE_NOEXCEPT
+
+#if defined(_MSC_VER)
+# pragma warning(pop)
+#endif
 
 #endif // EMBED_FUNCTION_HPP_
 
