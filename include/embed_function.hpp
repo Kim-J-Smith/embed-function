@@ -337,6 +337,11 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 #endif
 
+    // embed::Fn cannot wrap non-copyable callable object.
+    /// @c FnNonCopyable is aimed to help Fn manage them.
+    template <typename Signature, typename Functor, std::size_t BufSize>
+    struct FnNonCopyable;
+
   };
 
 
@@ -663,6 +668,31 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         >::value;
     };
 
+    /// @e is_movable_and_non_copyable
+    template <typename Functor>
+    struct is_movable_and_non_copyable
+    {
+      using Func = typename std::remove_cv<
+        typename std::remove_reference<Functor>::type
+      >::type;
+      static constexpr bool value = std::is_move_constructible<Func>::value
+        && !std::is_copy_constructible<Func>::value;
+    };
+
+    /// @e enableIf_movable_and_non_copyable_t
+    template <typename Functor>
+    using enableIf_movable_and_non_copyable_t = typename std::enable_if<
+      is_movable_and_non_copyable<Functor>::value
+    >::type;
+
+    /// @e disableIf_movable_and_non_copyable_and_nref_t
+    template <typename Functor>
+    using disableIf_movable_and_non_copyable_and_nref_t = typename std::enable_if<
+      !(is_movable_and_non_copyable<
+          typename std::decay<Functor>::type
+        >::value && !std::is_reference<Functor>::value)
+    >::type;
+
   }; // end FnTraits
 
 
@@ -812,22 +842,161 @@ namespace embed EMBED_ABI_VISIBILITY(default)
    */
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
   struct _FnToolBox::FnInvoker<RetType(ArgsType...), Functor, BufSize>
-  : private _FnToolBox::FnManager<RetType(ArgsType...), Functor, BufSize>
   {
   private:
-    using Base = _FnToolBox::FnManager<RetType(ArgsType...), Functor, BufSize>;
+    static Functor*
+    M_get_pointer(const _FnFunctor<BufSize>& src) noexcept
+    {
+      const Functor& fn = src.template M_access<Functor>();
+      return const_cast<Functor*>(std::addressof(fn));
+    }
   public:
 
     static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
-      return FnTraits::invoke_r<RetType>(*Base::M_get_pointer(functor),
+      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
         std::forward<ArgsType>(args)...);
     }
 
   };
 
 #endif
+
+  /**
+   * @c _FnToolBox::FnNonCopyable
+   * @brief Manager non-copyable objects.
+   */
+  template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
+  struct _FnToolBox::FnNonCopyable<RetType(ArgsType...), Functor, BufSize>
+  {
+  public:
+    constexpr static std::size_t M_max_size = sizeof(_FnBufType<BufSize>);
+    constexpr static std::size_t M_max_align = alignof(_FnBufType<BufSize>);
+
+    /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
+    using Invoker_Type = RetType (*) (const _FnFunctor<BufSize>&, ArgsType&&...);
+
+    /// @e Local_Storage
+    /// @brief Judge the functor is small or big.
+
+    static constexpr bool noThrowExcept =
+      std::is_nothrow_move_constructible<Functor>::value
+      && std::is_nothrow_destructible<Functor>::value;
+
+    static constexpr bool smallAndAligned =
+      sizeof(Functor) <= M_max_size
+      && alignof(Functor) <= M_max_align
+      && (sizeof(Functor) % alignof(Functor) == 0);
+
+    using Local_Storage = typename
+    std::integral_constant<bool,
+      noThrowExcept && smallAndAligned
+    >::type; // end Local_Storage
+
+    // MUST small and nothrow
+    static_assert(noThrowExcept,
+      "embed::Fn requires the functor to be nothrow move-constructible"
+      " and nothrow destructible");
+    static_assert(smallAndAligned,
+      "embed::Fn requires the functor to fit in `BufSize` and"
+      " have valid alignment (adjust `BufSize` if needed)");
+
+  private:
+    /// @e M_create
+    template <typename Func>
+    static void M_create(_FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    {
+      ::new (dest.M_access()) Functor(std::move(functor));
+    }
+
+    /// @e M_destroy
+    static void M_destroy(_FnFunctor<BufSize>& victim) noexcept
+    {
+      victim.template M_access<Functor>().~Functor();
+    }
+
+  public:
+    /// @e M_get_pointer
+    // break the `const` promises.
+    static Functor*
+    M_get_pointer(const _FnFunctor<BufSize>& src) noexcept
+    {
+      const Functor& fn = src.template M_access<Functor>();
+      return const_cast<Functor*>(std::addressof(fn));
+    }
+
+    /// @e M_not_empty_function
+    template <typename Signature, std::size_t Size>
+    static bool M_not_empty_function(const Fn<Signature, Size>& f) noexcept
+    { return static_cast<bool>(f); }
+
+    template <typename T>
+    static bool M_not_empty_function(T* fp) noexcept
+    { return fp != nullptr; }
+
+    template <typename Class, typename T>
+    static bool M_not_empty_function(T Class::* mp) noexcept
+    { return mp != nullptr; }
+
+    template <typename T>
+    static bool M_not_empty_function(const T&) noexcept
+    { return true; }
+
+    /// @e M_init_functor
+    // init functor by using M_create (perfect forward)
+    template <typename Func>
+    static void M_init_functor(_FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    {
+      M_create(dest, std::move(functor));
+    }
+
+#if ( EMBED_FN_NEED_FAST_CALL == false )
+
+    /// @e M_invoke
+    // This function only used when we expect FnManager to help Fn
+    // call the functor instead of FnInvoker.
+    static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
+    noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
+    {
+      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
+        std::forward<ArgsType>(args)...);
+    }
+
+#endif
+
+    /// @e M_manager
+    // Core func to manager functor.
+    static Invoker_Type
+    M_manager(_FnFunctor<BufSize>& dest, const _FnFunctor<BufSize>& src, manOpcode op) noexcept
+    {
+      Invoker_Type invoker = nullptr;
+
+      switch (op)
+      {
+      case OP_clone_functor:
+        /// @attention non-copyable object CANNOT clone!
+        std::terminate();
+        break;
+
+      case OP_move_functor:
+        M_init_functor(dest, std::move( *(M_get_pointer(src)) ));
+        break;
+
+      case OP_destroy_functor:
+        M_destroy(dest);
+        break;
+
+#if ( EMBED_FN_NEED_FAST_CALL == false )
+      case OP_get_invoker:
+        invoker = &M_invoke;
+        break;
+#endif
+      } // end switch
+
+      return invoker;
+    }
+  };
 
   /**
    * @brief   A light polymorphic wrapper for callable object.
@@ -854,6 +1023,9 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     template <typename Functor>
     using MyInvoker = FnInvoker<RetType(ArgsType...), Functor, BufSize>;
 #endif
+
+    template <typename Functor>
+    using MyNonCopyable = FnNonCopyable<RetType(ArgsType...), Functor, BufSize>;
 
     template <typename Functor>
     using Callable = FnTraits::Callable<RetType, Functor, ArgsType...>;
@@ -995,7 +1167,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
      * the type `decltype(func)` object.
      */
     template <typename Functor,
-      typename DecayFunctor = Fn::DecayFunc_t<Functor> >
+      typename DecayFunctor = Fn::DecayFunc_t<Functor>,
+      typename = FnTraits::disableIf_movable_and_non_copyable_and_nref_t<Functor> >
     Fn(Functor&& func) noexcept
     {
       static_assert(Fn::Callable<Functor>::value,
@@ -1012,6 +1185,28 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
         M_manager = &Fn::MyManager<DecayFunctor>::M_manager;
+        M_invoker = &Fn::MyInvoker<DecayFunctor>::M_invoke;
+      }
+    }
+
+    /**
+     * @brief Constructor for non-copyable object.
+     * @attention embed::Fn instance constructed from non-copyable object
+     * CANNOT use any copy behaviour, otherwise `std::terminate` will be called.
+     */
+    template <typename Functor,
+      typename DecayFunctor = Fn::DecayFunc_t<Functor>,
+      typename = FnTraits::enableIf_movable_and_non_copyable_t<DecayFunctor>,
+      typename = typename std::enable_if<!std::is_reference<Functor>::value>::type >
+    Fn(Functor&& func)
+    {
+      static_assert(Fn::Callable<Functor>::value,
+        "embed::Fn require the Functor is callable and the Signature match RetType");
+
+      if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
+      {
+        Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
+        M_manager = &Fn::MyNonCopyable<DecayFunctor>::M_manager;
         M_invoker = &Fn::MyInvoker<DecayFunctor>::M_invoke;
       }
     }
@@ -1113,7 +1308,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
      * the type `decltype(func)` object.
      */
     template <typename Functor,
-      typename DecayFunctor = Fn::DecayFunc_t<Functor> >
+      typename DecayFunctor = Fn::DecayFunc_t<Functor>,
+      typename = FnTraits::disableIf_movable_and_non_copyable_and_nref_t<Functor> >
     Fn(Functor&& func) noexcept
     {
       static_assert(Fn::Callable<Functor>::value,
@@ -1130,6 +1326,27 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
         M_manager = &Fn::MyManager<DecayFunctor>::M_manager;
+      }
+    }
+
+    /**
+     * @brief Constructor for non-copyable object.
+     * @attention embed::Fn instance constructed from non-copyable object
+     * CANNOT use any copy behaviour, otherwise `std::terminate` will be called.
+     */
+    template <typename Functor,
+      typename DecayFunctor = Fn::DecayFunc_t<Functor>,
+      typename = FnTraits::enableIf_movable_and_non_copyable_t<DecayFunctor>,
+      typename = typename std::enable_if<!std::is_reference<Functor>::value>::type >
+    Fn(Functor&& func)
+    {
+      static_assert(Fn::Callable<Functor>::value,
+        "embed::Fn require the Functor is callable and the Signature match RetType");
+
+      if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
+      {
+        Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
+        M_manager = &Fn::MyNonCopyable<DecayFunctor>::M_manager;
       }
     }
 
