@@ -89,11 +89,20 @@ namespace embed
   // the default buffer size for `embed::Fn`.
   constexpr decltype(sizeof(int)) _FnDefaultBufSize = (1 * sizeof(void*));
 
-  // the callback function to handle the `bad_function_call`
+  // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
   static inline void _bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
+    /// Or you can just ignore this function, and use
+    /// @e `std::set_terminate` instead.
+  }
+
+  // The callback function is to handle the case that
+  // copying non-copyable object that has been wrapped in `embed::Fn` instance.
+  static inline void _bad_function_copy_handler()
+  {
+    /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
     /// @e `std::set_terminate` instead.
   }
@@ -976,6 +985,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       {
       case OP_clone_functor:
         /// @attention non-copyable object CANNOT clone!
+        _bad_function_copy_handler();
         std::terminate();
         break;
 
