@@ -41,6 +41,17 @@
 # endif
 #endif
 
+/// @c EMBED_NORETURN
+#ifndef EMBED_NORETURN
+# if defined(__GNUC__) || defined(__clang__)
+#  define EMBED_NORETURN __attribute__((__noreturn__))
+# elif defined(_MSC_VER)
+#  define EMBED_NORETURN __declspec(noreturn)
+# else
+#  define EMBED_NORETURN
+# endif
+#endif
+
 namespace embed { namespace _fn_no_std {
 
   // std::size_t
@@ -65,7 +76,7 @@ namespace embed { namespace _fn_no_std {
 # pragma GCC diagnostic ignored "-Wunused-function"
 #endif
   // std::terminate
-  extern "C" void abort();
+  extern "C" EMBED_NORETURN void abort();
   [[noreturn]] static EMBED_INLINE void terminate() { abort(); };
 #if defined(__GNUC__) || defined(__clang__)
 # pragma GCC diagnostic pop
@@ -274,7 +285,9 @@ namespace embed { namespace _fn_no_std {
   using __add_lvalue_reference_t = typename __add_lvalue_reference_impl<_Tp>::type;
 
   // std::is_copy_constructible
-#if EMBED_HAS_BUILTIN(__is_constructible)
+  // this is a very important trait. If `__is_constructible` cannot be used,
+  // the non-copyable object cannot be wrapped into embed::Fn.
+#if EMBED_HAS_BUILTIN(__is_constructible) || defined(__GNUC__) || defined(_MSC_VER)
   template <class _Tp>
   struct is_copy_constructible
   : public integral_constant<bool, __is_constructible(_Tp, __add_lvalue_reference_t<const _Tp>)> {};
@@ -305,6 +318,41 @@ namespace embed { namespace _fn_no_std {
 #else
   template <class _Tp>
   struct is_nothrow_destructible
+  : public true_type {};
+#endif
+
+  template <class _Tp, bool = _is_referenceable<_Tp>::value>
+  struct __add_rvalue_reference_impl {
+    using type = _Tp;
+  };
+  template <class _Tp >
+  struct __add_rvalue_reference_impl<_Tp, true> {
+    using type = _Tp&&;
+  };
+
+  template <class _Tp>
+  using __add_rvalue_reference_t = typename __add_rvalue_reference_impl<_Tp>::type;
+
+  // std::is_nothrow_move_constructible
+#if EMBED_HAS_BUILTIN(__is_nothrow_constructible)
+  template <class _Tp>
+  struct is_nothrow_move_constructible
+  : public integral_constant<
+    bool, __is_nothrow_constructible(_Tp, __add_rvalue_reference_t<_Tp>)
+  > {};
+#else
+  template <class _Tp>
+  struct is_nothrow_move_constructible
+  : public true_type {};
+#endif
+
+#if EMBED_HAS_BUILTIN(__is_constructible)
+  template <class _Tp>
+  struct is_move_constructible
+  : public integral_constant<bool, __is_constructible(_Tp, __add_rvalue_reference_t<_Tp>)> {};
+#else
+  template <class _Tp>
+  struct is_move_constructible
   : public true_type {};
 #endif
 
