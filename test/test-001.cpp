@@ -61,6 +61,19 @@ t1_008_struct_02 t1_009_return_a_class(int a) {
     return t1_008_struct_02(a);
 }
 
+struct t1_010_struct_non_copyable
+{
+    t1_010_struct_non_copyable(const t1_010_struct_non_copyable&) = delete;
+
+    t1_010_struct_non_copyable(t1_010_struct_non_copyable&& ) noexcept {}
+
+    t1_010_struct_non_copyable() = default;
+
+    void operator=(const t1_010_struct_non_copyable&) = delete;
+
+    void operator()() noexcept { printf("Here is non-copyable struct\n"); }
+};
+
 void test_001()
 {
     std::cout << "\n[START - test_001]\n" << std::endl;
@@ -87,6 +100,8 @@ void test_001()
     embed::function<float(char,int)> fn9 = 
         [&struct__001](char a, int b) noexcept { return struct__001.member_func(a,b); };
 
+    embed::function<void()> fn10 = t1_010_struct_non_copyable{};
+
     std::cout << "<test_001>: [BEGIN] Strict and accurate type signatures" << std::endl;
 
     fn1();
@@ -98,6 +113,7 @@ void test_001()
     auto tmp_7 = fn7(1, 3.1415f, 2.7, 'B');
     auto tmp_8 = fn8(1, 3.1415f, 2.7, 'C');
     auto tmp_9 = fn9('D', 12345);
+    fn10();
 
     std::cout << "fn2() = " << tmp_2 << std::endl;
     std::cout << "fn7() = " << tmp_7 << std::endl;
@@ -163,6 +179,8 @@ void test_001()
 
     auto fn44 = embed::make_function(t1_009_return_a_class);
 
+    auto fn45 = embed::make_function(t1_010_struct_non_copyable{});
+
     std::cout << "<test_001>: [BEGIN] Test the `make_function`" << std::endl;
 
     fn30();
@@ -180,6 +198,7 @@ void test_001()
     fn42(42, 4200.1);
     fn43(43, 4300.1);
     fn44(44);
+    fn45();
 
     std::cout << "fn33() = " << tmp_33 << std::endl;
     std::cout << "fn38() = " << tmp_38 << std::endl;
