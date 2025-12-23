@@ -29,6 +29,19 @@ struct t2_001_multi_args_float_return
     void operator=(const t2_001_multi_args_float_return&) = delete;
 };
 
+struct t2_002_non_copyable_struct
+{
+    t2_002_non_copyable_struct(const t2_002_non_copyable_struct&) = delete;
+    t2_002_non_copyable_struct(t2_002_non_copyable_struct&&) = default;
+    t2_002_non_copyable_struct() = default;
+    void operator=(const t2_002_non_copyable_struct&) = delete;
+    ~t2_002_non_copyable_struct() = default;
+
+    void operator()(int a) const noexcept {
+        printf("Here is non-copyable struct, a=%d\n", a);
+    }
+};
+
 void test_002()
 {
     std::cout << "\n[START - test_002]\n" << std::endl;
@@ -63,6 +76,14 @@ void test_002()
 
     auto fn10 = make_function(fn9); // ADL
 
+    auto fn11 = embed::make_function(t2_002_non_copyable_struct{});
+
+    auto fn12 = std::move(fn11);
+
+    std::swap(fn11, fn12);
+
+    fn12 = embed::make_function(t2_002_non_copyable_struct());
+
     std::cout << "\n<test_002>: [BEGIN] Copy and move between embed::Fn" << std::endl;
 
     fn1(0, 0, 1);
@@ -77,12 +98,19 @@ void test_002()
     } catch(const std::exception& e) {
         std::cerr << e.what() << std::endl;
     }
+# if EMBED_NO_STD_HEADER
+    catch(const embed::_fn_no_std::exception& e) {
+        std::cerr << e.what() << std::endl;
+    }
+# endif
 #endif
 
     fn7(0, 0, 7);
     fn8(0, 0, 8);
     fn9(0, 0, 9);
     fn10(0, 0, 10);
+    fn11(11);
+    fn12(12);
 
     std::cout << "<test_002>: [END] Copy and move between embed::Fn\n" << std::endl;
 
