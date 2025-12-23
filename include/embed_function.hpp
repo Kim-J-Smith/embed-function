@@ -63,6 +63,25 @@ SOFTWARE.
  * C++ exceptions or to ignore this warning by defining a macro (the specific
  * warning content will include more detailed instructions on how to handle it).
  * 
+ * EXAMPLE:
+ *  
+ *  embed::function<Signature> fn = normal_function;
+ * 
+ *  embed::function<void()> fn = []() { printf("hello\n"); };
+ * 
+ *  embed::function<Signature> fn = callable_class{};
+ * 
+ *  auto fn = embed::make_function<Signature>(normal_function);
+ * 
+ *  auto fn = embed::make_function(normal_function); // auto infer the Signature
+ * 
+ *  auto fn = embed::make_function<void(char)>([](int) { printf("hello\n"); });
+ * 
+ *  auto fn = embed::make_function([](int) { printf("hello\n"); }); // auto infer the Signature
+ * 
+ *  auto fn = embed::make_function<Signature>(callable_class{});
+ *  
+ *  auto fn = embed::make_function(callable_class{}); // auto infer the Signature
  */
 
 /// @c C++11 "embed_function.hpp"
@@ -331,7 +350,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     struct FnTraits;
 
     // embed::Fn will forget the type of Functor
-    /// @c FnManager is aimed to remember the type, help Fn manager functor.
+    /// @c FnManager is aimed to remember the type, help Fn manage functor.
     template <typename Signature, typename Functor, std::size_t BufSize>
     struct FnManager;
 
@@ -339,7 +358,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     /// @c FnInvoker is aimed to help Fn call the functor.
     /// When @b EMBED_FN_NEED_FAST_CALL is false, FnManager
-    /// will helper Fn call the functor instead of FnInvoker,
+    /// will help Fn call the functor instead of FnInvoker,
     /// which will save the RAM, but is more slower than FnInvoker.
     template <typename Signature, typename Functor, std::size_t BufSize>
     struct FnInvoker;
@@ -1624,8 +1643,6 @@ namespace std EMBED_ABI_VISIBILITY(default)
 #undef EMBED_FN_NEED_FAST_CALL
 #undef EMBED_FN_NOTHROW_CALLABLE
 #undef EMBED_FN_CASE_NOEXCEPT
-#undef EMBED_STD_NAMESPACE_BEGIN
-#undef EMBED_STD_NAMESPACE_END
 
 #if defined(_MSC_VER)
 # pragma warning(pop)
