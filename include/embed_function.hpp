@@ -102,33 +102,8 @@ SOFTWARE.
 // assert nothrow callable function
 #define EMBED_FN_NOTHROW_CALLABLE   false
 
-namespace embed
-{
-
-  // the default buffer size for `embed::Fn`.
-  constexpr decltype(sizeof(int)) _FnDefaultBufSize = (1 * sizeof(void*));
-
-  // The callback function is to handle the `bad_function_call`
-  // only when the C++ exception is disabled.
-  static inline void _bad_function_call_handler()
-  {
-    /// Your can deal with the `bad_function_call` here.
-    /// Or you can just ignore this function, and use
-    /// @e `std::set_terminate` instead.
-  }
-
-  // The callback function is to handle the case that
-  // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  static inline void _bad_function_copy_handler()
-  {
-    /// Your can deal with the bad function copy here.
-    /// Or you can just ignore this function, and use
-    /// @e `std::set_terminate` instead.
-  }
-
-}
-
 ////////////////////////////////////////////////////////////////
+
 
 /// @c EMBED_CXX_VERSION
 #ifndef EMBED_CXX_VERSION
@@ -263,6 +238,40 @@ namespace embed
 # error embed_func need C++11 or greater version, try use '-std=c++11'.
 #endif
 
+////////////////////////////////////////////////////////////////
+namespace embed
+{
+
+  /// @note User can customize following configs
+
+  // the default buffer size for `embed::Fn`.
+  constexpr decltype(sizeof(int)) _FnDefaultBufSize = (1 * sizeof(void*));
+
+  // The callback function is to handle the `bad_function_call`
+  // only when the C++ exception is disabled.
+  [[noreturn]] static inline void __bad_function_call_handler()
+  {
+    /// Your can deal with the `bad_function_call` here.
+    /// Or you can just ignore this function, and use
+    /// @e `std::set_terminate` instead.
+
+    std::terminate(); // Terminate the program
+  }
+
+  // The callback function is to handle the case that
+  // copying non-copyable object that has been wrapped in `embed::Fn` instance.
+  [[noreturn]] static inline void __bad_function_copy_handler()
+  {
+    /// Your can deal with the bad function copy here.
+    /// Or you can just ignore this function, and use
+    /// @e `std::set_terminate` instead.
+
+    std::terminate(); // Terminate the program
+  }
+
+}
+////////////////////////////////////////////////////////////////
+
 namespace embed EMBED_ABI_VISIBILITY(default)
 {
   // declare ahead
@@ -294,8 +303,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
 #else
-    _bad_function_call_handler();
-    std::terminate(); // Abort all
+    __bad_function_call_handler();
 #endif
   }
 
@@ -1004,8 +1012,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       {
       case OP_clone_functor:
         /// @attention non-copyable object CANNOT clone!
-        _bad_function_copy_handler();
-        std::terminate();
+        __bad_function_copy_handler();
         break;
 
       case OP_move_functor:
