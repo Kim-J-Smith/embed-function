@@ -1621,6 +1621,32 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     return function<Signature, BufSize>(fn);
   }
 
+  // Overload for member function.
+  template <typename Class, typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline auto
+  make_function(RetType (Class::* member_func) (ArgsType...)) noexcept
+  -> function<RetType(Class&, ArgsType...), sizeof(member_func)>
+  {
+    return function<RetType(Class&, ArgsType...), sizeof(member_func)>(
+      [member_func](Class& object, ArgsType... args) -> RetType {
+        return (object.*member_func) (args...);
+      }
+    );
+  }
+
+  // Overload for member function. (const)
+  template <typename Class, typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline auto
+  make_function(RetType (Class::* member_func) (ArgsType...) const) noexcept
+  -> function<RetType(const Class&, ArgsType...), sizeof(member_func)>
+  {
+    return function<RetType(const Class&, ArgsType...), sizeof(member_func)>(
+      [member_func](const Class& object, ArgsType... args) -> RetType {
+        return (object.*member_func) (args...);
+      }
+    );
+  }
+
 } // end namespace embed
 
 #if defined(EMBED_NO_STD_HEADER)
