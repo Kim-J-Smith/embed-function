@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.4
+ * @version     1.0.5
  * 
  * @date        2025-12-6
  * 
@@ -80,8 +80,10 @@ SOFTWARE.
  *  auto fn = embed::make_function([](int) { printf("hello\n"); }); // auto infer the Signature
  * 
  *  auto fn = embed::make_function<Signature>(callable_class{});
- *  
+ * 
  *  auto fn = embed::make_function(callable_class{}); // auto infer the Signature
+ * 
+ *  auto fn = embed::make_function(&my_class::member_function); // auto infer the Signature
  */
 
 /// @c C++11 "embed_function.hpp"
