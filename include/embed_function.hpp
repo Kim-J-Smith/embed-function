@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.4
+ * @version     1.0.5
  * 
  * @date        2025-12-6
  * 
@@ -71,6 +71,9 @@ SOFTWARE.
  * 
  *  embed::function<Signature> fn = callable_class{};
  * 
+ *  embed::function<Signature, sizeof(callable_class)> = callable_class{...};
+ * 
+ * 
  *  auto fn = embed::make_function<Signature>(normal_function);
  * 
  *  auto fn = embed::make_function(normal_function); // auto infer the Signature
@@ -80,8 +83,19 @@ SOFTWARE.
  *  auto fn = embed::make_function([](int) { printf("hello\n"); }); // auto infer the Signature
  * 
  *  auto fn = embed::make_function<Signature>(callable_class{});
- *  
+ * 
  *  auto fn = embed::make_function(callable_class{}); // auto infer the Signature
+ * 
+ *  auto fn = embed::make_function(&my_class::member_function); // auto infer the Signature
+ * 
+ * 
+ *  embed::Fn fn = normal_function; // require C++17 template deduce guide
+ * 
+ *  embed::Fn fn = []() { printf("hello\n"); }; // require C++17 template deduce guide
+ * 
+ *  embed::Fn fn = callable_class{}; // require C++17 template deduce guide
+ * 
+ *  embed::Fn fn = callable_class{...}; // require C++17 template deduce guide
  */
 
 /// @c C++11 "embed_function.hpp"
@@ -102,33 +116,8 @@ SOFTWARE.
 // assert nothrow callable function
 #define EMBED_FN_NOTHROW_CALLABLE   false
 
-namespace embed
-{
-
-  // the default buffer size for `embed::Fn`.
-  constexpr decltype(sizeof(int)) _FnDefaultBufSize = (1 * sizeof(void*));
-
-  // The callback function is to handle the `bad_function_call`
-  // only when the C++ exception is disabled.
-  static inline void _bad_function_call_handler()
-  {
-    /// Your can deal with the `bad_function_call` here.
-    /// Or you can just ignore this function, and use
-    /// @e `std::set_terminate` instead.
-  }
-
-  // The callback function is to handle the case that
-  // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  static inline void _bad_function_copy_handler()
-  {
-    /// Your can deal with the bad function copy here.
-    /// Or you can just ignore this function, and use
-    /// @e `std::set_terminate` instead.
-  }
-
-}
-
 ////////////////////////////////////////////////////////////////
+
 
 /// @c EMBED_CXX_VERSION
 #ifndef EMBED_CXX_VERSION
@@ -263,6 +252,40 @@ namespace embed
 # error embed_func need C++11 or greater version, try use '-std=c++11'.
 #endif
 
+////////////////////////////////////////////////////////////////
+namespace embed
+{
+
+  /// @note User can customize following configs
+
+  // the default buffer size for `embed::Fn`.
+  constexpr std::size_t _FnDefaultBufSize = (1 * sizeof(void*));
+
+  // The callback function is to handle the `bad_function_call`
+  // only when the C++ exception is disabled.
+  [[noreturn]] static EMBED_INLINE void __bad_function_call_handler()
+  {
+    /// Your can deal with the `bad_function_call` here.
+    /// Or you can just ignore this function, and use
+    /// @e `std::set_terminate` instead.
+
+    std::terminate(); // Terminate the program
+  }
+
+  // The callback function is to handle the case that
+  // copying non-copyable object that has been wrapped in `embed::Fn` instance.
+  [[noreturn]] static EMBED_INLINE void __bad_function_copy_handler()
+  {
+    /// Your can deal with the bad function copy here.
+    /// Or you can just ignore this function, and use
+    /// @e `std::set_terminate` instead.
+
+    std::terminate(); // Terminate the program
+  }
+
+}
+////////////////////////////////////////////////////////////////
+
 namespace embed EMBED_ABI_VISIBILITY(default)
 {
   // declare ahead
@@ -294,8 +317,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
 #else
-    _bad_function_call_handler();
-    std::terminate(); // Abort all
+    __bad_function_call_handler();
 #endif
   }
 
@@ -638,6 +660,20 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
     template <typename Ret, typename Functor, typename... ArgsType>
     struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const noexcept>
+    { using type = Ret(ArgsType...); };
+
+#endif
+
+#if ( __cpp_explicit_this_parameter >= 202110L ) || ( EMBED_CXX_VERSION >= 202302L )
+
+    // 3617. function/packaged_task deduction guides and deducing this.
+
+    template <typename ThisType, typename Ret, typename... ArgsType>
+    struct get_unique_call_signature_impl<Ret (*) (ThisType, ArgsType...)>
+    { using type = Ret(ArgsType...); };
+
+    template <typename ThisType, typename Ret, typename... ArgsType>
+    struct get_unique_call_signature_impl<Ret (*) (ThisType, ArgsType...) noexcept>
     { using type = Ret(ArgsType...); };
 
 #endif
@@ -1004,8 +1040,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       {
       case OP_clone_functor:
         /// @attention non-copyable object CANNOT clone!
-        _bad_function_copy_handler();
-        std::terminate();
+        __bad_function_copy_handler();
         break;
 
       case OP_move_functor:
@@ -1264,7 +1299,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       std::swap(M_invoker, fn.M_invoker);
     }
 
-    // Call the functor with type `ArgsType...` arguments.
+    /// @brief Call the functor with type `ArgsType...` arguments.
+    /// @attention This contravenes [res.on.data.races]/p3. (same as `std::function`)
     RetType operator() (ArgsType... args) const
     EMBED_FN_CASE_NOEXCEPT
     {
@@ -1410,7 +1446,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 # endif
 
-    // Call the functor with type `ArgsType...` arguments.
+    /// @brief Call the functor with type `ArgsType...` arguments.
+    /// @attention This contravenes [res.on.data.races]/p3. (same as `std::function`)
     RetType operator() (ArgsType... args) const
     EMBED_FN_CASE_NOEXCEPT
     {
@@ -1620,6 +1657,85 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   {
     return function<Signature, BufSize>(fn);
   }
+
+  // Overload for member function.
+  template <typename Class, typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline auto
+  make_function(RetType (Class::* member_func) (ArgsType...)) noexcept
+  -> function<RetType(Class&, ArgsType...), sizeof(member_func)>
+  {
+    return function<RetType(Class&, ArgsType...), sizeof(member_func)>(
+      [member_func](Class& object, ArgsType... args) -> RetType {
+        return (object.*member_func) (args...);
+      }
+    );
+  }
+
+  // Overload for member function. (&)
+  template <typename Class, typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline auto
+  make_function(RetType (Class::* member_func) (ArgsType...) &) noexcept
+  -> function<RetType(Class&, ArgsType...), sizeof(member_func)>
+  {
+    return function<RetType(Class&, ArgsType...), sizeof(member_func)>(
+      [member_func](Class& object, ArgsType... args) -> RetType {
+        return (object.*member_func) (args...);
+      }
+    );
+  }
+
+  // Overload for member function. (const)
+  template <typename Class, typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline auto
+  make_function(RetType (Class::* member_func) (ArgsType...) const) noexcept
+  -> function<RetType(const Class&, ArgsType...), sizeof(member_func)>
+  {
+    return function<RetType(const Class&, ArgsType...), sizeof(member_func)>(
+      [member_func](const Class& object, ArgsType... args) -> RetType {
+        return (object.*member_func) (args...);
+      }
+    );
+  }
+
+  // Overload for member function. (const &)
+  template <typename Class, typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline auto
+  make_function(RetType (Class::* member_func) (ArgsType...) const &) noexcept
+  -> function<RetType(const Class&, ArgsType...), sizeof(member_func)>
+  {
+    return function<RetType(const Class&, ArgsType...), sizeof(member_func)>(
+      [member_func](const Class& object, ArgsType... args) -> RetType {
+        return (object.*member_func) (args...);
+      }
+    );
+  }
+
+#if ( __cpp_deduction_guides >= 201606 ) || ( EMBED_CXX_VERSION >= 201703L )
+
+  // Deduce the template type.
+
+  template <typename Functor>
+  struct __function_deduce_guide_helper
+  {
+    using type = decltype(make_function(std::declval<Functor>()));
+  };
+
+  template <typename T> struct __function_deduce_get_signature;
+
+  template <typename Sig, std::size_t Buf>
+  struct __function_deduce_get_signature<Fn<Sig, Buf>>
+  {
+    using signature = Sig;
+    static constexpr std::size_t bufsize = Buf;
+  };
+
+  template <typename Functor,
+    typename DeduceRet = typename __function_deduce_guide_helper<Functor>::type,
+    typename Signature = typename __function_deduce_get_signature<DeduceRet>::signature,
+    std::size_t BufferSize = __function_deduce_get_signature<DeduceRet>::bufsize>
+  Fn(Functor) -> Fn<Signature, BufferSize>;
+
+#endif
 
 } // end namespace embed
 

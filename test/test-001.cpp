@@ -28,10 +28,21 @@ struct t1_005_callable_struct {
         return 31415;
     }
 
-    float member_func(char a, int b) noexcept {
+    float member_func(char a, int b) const noexcept {
         printf("Here is member function, a=%c, b=%d\n", a,b);
         return 3.1415926f;
     }
+
+    float member_func_ref(char a, int b) & noexcept {
+        printf("Here is member function, a=%c, b=%d\n", a,b);
+        return 3.1415926f;
+    }
+
+    float member_func_const_ref(char a, int b) const & noexcept {
+        printf("Here is member function, a=%c, b=%d\n", a,b);
+        return 3.1415926f;
+    }
+
 };
 
 struct t1_006_unique_callable {
@@ -73,6 +84,20 @@ struct t1_010_struct_non_copyable
 
     void operator()() noexcept { printf("Here is non-copyable struct\n"); }
 };
+
+#if ( EMBED_CXX_VERSION >= 202302L )
+
+struct t1_011_struct_explicit_this
+{
+    void print__() const noexcept {
+        printf("Here is explicit-this struct\n");
+    }
+
+    void operator()(this t1_011_struct_explicit_this& self) noexcept
+    { self.print__(); }
+};
+
+#endif
 
 void test_001()
 {
@@ -181,6 +206,20 @@ void test_001()
 
     auto fn45 = embed::make_function(t1_010_struct_non_copyable{});
 
+    auto fn46 = embed::make_function(&t1_005_callable_struct::member_func);
+
+    auto fn47 = embed::make_function(&t1_005_callable_struct::member_func_ref);
+
+    auto fn48 = embed::make_function(&t1_005_callable_struct::member_func_const_ref);
+
+#if ( EMBED_CXX_VERSION >= 202302L )
+
+    auto fn49 = embed::make_function(t1_011_struct_explicit_this{});
+
+#endif
+
+    std::cout << "fn46.bufsize = " << fn46.buffer_size << std::endl;
+
     std::cout << "<test_001>: [BEGIN] Test the `make_function`" << std::endl;
 
     fn30();
@@ -199,11 +238,48 @@ void test_001()
     fn43(43, 4300.1);
     fn44(44);
     fn45();
+    fn46(struct__001, 'H', 46);
+    fn47(struct__001, 'I', 47);
+    fn48(struct__001, 'J', 48);
+
+#if ( EMBED_CXX_VERSION >= 202302L )
+    fn49();
+#endif
 
     std::cout << "fn33() = " << tmp_33 << std::endl;
     std::cout << "fn38() = " << tmp_38 << std::endl;
 
     std::cout << "<test_001>: [END] Test the `make_function`\n" << std::endl;
+
+
+    // Test the template guide
+#if EMBED_CXX_VERSION >= 201703L
+
+    embed::Fn fn101 = t1_001_normal_function;
+
+    embed::Fn fn102 = t1_002_return_function;
+
+    embed::Fn fn103 = t1_003_one_arg_function;
+
+    embed::Fn fn104 = t1_004_multi_args_function;
+
+    embed::Fn fn105 = t1_006_unique_callable{};
+
+    std::cout << "<test_001>: [BEGIN] Test the template guide\n" << std::endl;
+
+    fn101();
+
+    fn102();
+
+    fn103(103);
+
+    fn104(104, 1.04f, 1.004, 'L');
+
+    fn105(105);
+
+    std::cout << "<test_001>: [END] Test the template guide\n" << std::endl;
+
+#endif // C++17
 
     std::cout << "[END - test_001] : " GREEN "OK" RESET "\n\n" << std::endl;
 #if defined(_MSC_VER)
