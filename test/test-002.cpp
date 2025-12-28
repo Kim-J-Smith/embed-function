@@ -84,6 +84,10 @@ void test_002()
 
     fn12 = embed::make_function(t2_002_non_copyable_struct());
 
+    embed::function<void(int)> fn13;
+
+    fn13 = std::move(fn12);
+
     std::cout << "\n<test_002>: [BEGIN] Copy and move between embed::Fn" << std::endl;
 
     fn1(0, 0, 1);
@@ -98,7 +102,7 @@ void test_002()
     } catch(const std::exception& e) {
         std::cerr << e.what() << std::endl;
     }
-# if EMBED_NO_STD_HEADER
+# if defined(EMBED_NO_STD_HEADER)
     catch(const embed::_fn_no_std::exception& e) {
         std::cerr << e.what() << std::endl;
     }
@@ -110,7 +114,7 @@ void test_002()
     fn9(0, 0, 9);
     fn10(0, 0, 10);
     fn11(11);
-    fn12(12);
+    fn13(13);
 
     std::cout << "<test_002>: [END] Copy and move between embed::Fn\n" << std::endl;
 
