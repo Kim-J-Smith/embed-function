@@ -71,6 +71,8 @@ SOFTWARE.
  * 
  *  embed::function<Signature> fn = callable_class{};
  * 
+ *  embed::function<Signature, sizeof(callable_class)> = callable_class{...};
+ * 
  *  auto fn = embed::make_function<Signature>(normal_function);
  * 
  *  auto fn = embed::make_function(normal_function); // auto infer the Signature
@@ -247,11 +249,11 @@ namespace embed
   /// @note User can customize following configs
 
   // the default buffer size for `embed::Fn`.
-  constexpr decltype(sizeof(int)) _FnDefaultBufSize = (1 * sizeof(void*));
+  constexpr std::size_t _FnDefaultBufSize = (1 * sizeof(void*));
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] static inline void __bad_function_call_handler()
+  [[noreturn]] static EMBED_INLINE void __bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -262,7 +264,7 @@ namespace embed
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] static inline void __bad_function_copy_handler()
+  [[noreturn]] static EMBED_INLINE void __bad_function_copy_handler()
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
