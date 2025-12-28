@@ -73,6 +73,7 @@ SOFTWARE.
  * 
  *  embed::function<Signature, sizeof(callable_class)> = callable_class{...};
  * 
+ * 
  *  auto fn = embed::make_function<Signature>(normal_function);
  * 
  *  auto fn = embed::make_function(normal_function); // auto infer the Signature
@@ -86,6 +87,15 @@ SOFTWARE.
  *  auto fn = embed::make_function(callable_class{}); // auto infer the Signature
  * 
  *  auto fn = embed::make_function(&my_class::member_function); // auto infer the Signature
+ * 
+ * 
+ *  embed::Fn fn = normal_function; // require C++17 template deduce guide
+ * 
+ *  embed::Fn fn = []() { printf("hello\n"); }; // require C++17 template deduce guide
+ * 
+ *  embed::Fn fn = callable_class{}; // require C++17 template deduce guide
+ * 
+ *  embed::Fn fn = callable_class{...}; // require C++17 template deduce guide
  */
 
 /// @c C++11 "embed_function.hpp"
