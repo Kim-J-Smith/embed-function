@@ -1266,6 +1266,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       }
     }
 
+# if !defined(EMBED_NOSTDHEADER_NO_NONCOPYABLE)
     /**
      * @brief Constructor for non-copyable object.
      * @attention embed::Fn instance constructed from non-copyable object
@@ -1289,6 +1290,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         M_invoker = (decltype(M_invoker)) &Fn::MyInvoker<DecayFunctor>::M_invoke;
       }
     }
+# endif // !defined(EMBED_NOSTDHEADER_NO_NONCOPYABLE)
 
     // Swap Fn but unkown the real type of `Functor`.
     // But only M_manager remember the `Functor`.
@@ -1411,6 +1413,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       }
     }
 
+# if !defined(EMBED_NOSTDHEADER_NO_NONCOPYABLE)
     /**
      * @brief Constructor for non-copyable object.
      * @attention embed::Fn instance constructed from non-copyable object
@@ -1433,6 +1436,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         M_manager = (decltype(M_manager)) &Fn::MyNonCopyable<DecayFunctor>::M_manager;
       }
     }
+# endif // !defined(EMBED_NOSTDHEADER_NO_NONCOPYABLE)
 
     // Swap Fn but unkown the real type of `Functor`.
     // But only M_manager remember the `Functor`.

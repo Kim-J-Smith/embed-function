@@ -287,7 +287,7 @@ namespace embed { namespace _fn_no_std {
   // std::is_copy_constructible
   // this is a very important trait. If `__is_constructible` cannot be used,
   // the non-copyable object cannot be wrapped into embed::Fn.
-#if EMBED_HAS_BUILTIN(__is_constructible) || defined(__GNUC__) || defined(_MSC_VER)
+#if EMBED_HAS_BUILTIN(__is_constructible)
   template <class _Tp>
   struct is_copy_constructible
   : public integral_constant<bool, __is_constructible(_Tp, __add_lvalue_reference_t<const _Tp>)> {};
@@ -295,6 +295,7 @@ namespace embed { namespace _fn_no_std {
   template <class _Tp>
   struct is_copy_constructible
   : public true_type {};
+# define EMBED_NOSTDHEADER_NO_NONCOPYABLE
 #endif
 
   // std::is_nothrow_copy_constructible
