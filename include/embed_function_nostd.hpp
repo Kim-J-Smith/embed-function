@@ -43,7 +43,7 @@
 
 /// @c EMBED_NORETURN
 #ifndef EMBED_NORETURN
-# if defined(__GNUC__) || defined(__clang__)
+# if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
 #  define EMBED_NORETURN __attribute__((__noreturn__))
 # elif defined(_MSC_VER)
 #  define EMBED_NORETURN __declspec(noreturn)
@@ -570,6 +570,16 @@ namespace embed { namespace _fn_no_std {
   }
 
 } } // end namespace embed::_no_std
+
+EMBED_NODISCARD EMBED_INLINE void*
+operator new(decltype(sizeof(int)), void* __p) noexcept {
+  return __p;
+}
+
+EMBED_NODISCARD EMBED_INLINE void*
+operator new[](decltype(sizeof(int)), void* __p) noexcept {
+  return __p;
+}
 
 #endif // EMBED_FUNCTION_NOSTD_HPP__
 

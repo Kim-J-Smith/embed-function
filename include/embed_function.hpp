@@ -235,6 +235,15 @@ SOFTWARE.
 # endif
 #endif
 
+/// @c EMBED_UNUSED
+#ifndef EMBED_UNUSED
+# if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
+#  define EMBED_UNUSED __attribute__((unused))
+# else
+#  define EMBED_UNUSED
+# endif
+#endif
+
 // Header files
 #if EMBED_CXX_VERSION >= 201103L
 # ifndef EMBED_NO_STD_HEADER
@@ -264,7 +273,7 @@ namespace embed
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] static EMBED_INLINE void __bad_function_call_handler()
+  [[noreturn]] static EMBED_INLINE EMBED_UNUSED void __bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -275,7 +284,7 @@ namespace embed
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] static EMBED_INLINE void __bad_function_copy_handler()
+  [[noreturn]] static EMBED_INLINE EMBED_UNUSED void __bad_function_copy_handler()
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
@@ -1250,8 +1259,10 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
-        M_manager = &Fn::MyManager<DecayFunctor>::M_manager;
-        M_invoker = &Fn::MyInvoker<DecayFunctor>::M_invoke;
+
+        // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
+        M_manager = (decltype(M_manager)) &Fn::MyManager<DecayFunctor>::M_manager;
+        M_invoker = (decltype(M_invoker)) &Fn::MyInvoker<DecayFunctor>::M_invoke;
       }
     }
 
@@ -1272,8 +1283,10 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
       {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
-        M_manager = &Fn::MyNonCopyable<DecayFunctor>::M_manager;
-        M_invoker = &Fn::MyInvoker<DecayFunctor>::M_invoke;
+
+        // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
+        M_manager = (decltype(M_manager)) &Fn::MyNonCopyable<DecayFunctor>::M_manager;
+        M_invoker = (decltype(M_invoker)) &Fn::MyInvoker<DecayFunctor>::M_invoke;
       }
     }
 
@@ -1392,7 +1405,9 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
-        M_manager = &Fn::MyManager<DecayFunctor>::M_manager;
+
+        // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
+        M_manager = (decltype(M_manager)) &Fn::MyManager<DecayFunctor>::M_manager;
       }
     }
 
@@ -1413,7 +1428,9 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
       {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
-        M_manager = &Fn::MyNonCopyable<DecayFunctor>::M_manager;
+
+        // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
+        M_manager = (decltype(M_manager)) &Fn::MyNonCopyable<DecayFunctor>::M_manager;
       }
     }
 
