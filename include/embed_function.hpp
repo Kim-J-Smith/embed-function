@@ -239,6 +239,7 @@ SOFTWARE.
 #if EMBED_CXX_VERSION >= 201103L
 # ifndef EMBED_NO_STD_HEADER
 #  include <cstddef> // std::size_t
+#  include <new> // placement new
 #  include <utility> // std::move, std::forward, std::addressof
 #  include <type_traits>
 #  include <exception>
@@ -667,6 +668,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #if ( __cpp_explicit_this_parameter >= 202110L ) || ( EMBED_CXX_VERSION >= 202302L )
 
     // 3617. function/packaged_task deduction guides and deducing this.
+    // See https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2021/p0847r7.html
 
     template <typename ThisType, typename Ret, typename... ArgsType>
     struct get_unique_call_signature_impl<Ret (*) (ThisType, ArgsType...)>
