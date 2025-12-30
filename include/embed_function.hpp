@@ -48,7 +48,7 @@ SOFTWARE.
  * After careful consideration, `embed::function` does not plan to implement
  * the `target_type()` and `target()` member functions. The main reason for 
  * the former is that it relies on RTTI, which is often disabled in the embedded 
- * domain. The latter is due to the reason of thread-safe access isolation
+ * domain. The latter is due to the reason of thread-safe access isolation.
  * (more details: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4159.pdf)
  * 
  * By default, the space occupied by a single instance is only the size of
@@ -241,6 +241,20 @@ SOFTWARE.
 #  define EMBED_UNUSED __attribute__((unused))
 # else
 #  define EMBED_UNUSED
+# endif
+#endif
+
+/// @c EMBED_EXPECT @c EMBED_NOT_EXPECT
+#ifndef EMBED_EXPECT
+# if EMBED_CXX_VERSION >= 202002L
+#  define EMBED_EXPECT(condition) (condition) [[likely]]
+#  define EMBED_NOT_EXPECT(condition) (condition) [[unlikely]]
+# elif defined(__GNUC__) || defined(__clang__)
+#  define EMBED_EXPECT(condition) (__builtin_expect(static_cast<bool>(condition), 1))
+#  define EMBED_NOT_EXPECT(condition) (__builtin_expect(static_cast<bool>(condition), 0))
+# else
+#  define EMBED_EXPECT(condition) (condition)
+#  define EMBED_NOT_EXPECT(condition) (condition)
 # endif
 #endif
 
@@ -1321,7 +1335,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     RetType operator() (ArgsType... args) const
     EMBED_FN_CASE_NOEXCEPT
     {
-      if (M_invoker)
+      if EMBED_EXPECT(M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
         _throw_bad_function_call(); /* may throw exception */
@@ -1474,7 +1488,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     RetType operator() (ArgsType... args) const
     EMBED_FN_CASE_NOEXCEPT
     {
-      if (M_manager) {
+      if EMBED_EXPECT(M_manager) {
         _FnFunctor<BufSize> nil;
         Invoker_Type invoker = M_manager(nil, nil, OP_get_invoker);
         return invoker(M_functor, std::forward<ArgsType>(args)...);
