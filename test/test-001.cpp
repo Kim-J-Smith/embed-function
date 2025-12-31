@@ -2,11 +2,7 @@
 #include <cstdio>
 #include <iostream>
 #include <functional>
-#include "embed_function.hpp"
-
-#define GREEN "\033[32m"
-
-#define RESET "\033[0m"
+#include "embed/embed_function.hpp"
 
 static void t1_001_normal_function(void) noexcept { printf("Here is normal function\n"); }
 
@@ -125,7 +121,9 @@ void test_001()
     embed::function<float(char,int)> fn9 = 
         [&struct__001](char a, int b) noexcept { return struct__001.member_func(a,b); };
 
+#if !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
     embed::function<void()> fn10 = t1_010_struct_non_copyable{};
+#endif
 
     std::cout << "<test_001>: [BEGIN] Strict and accurate type signatures" << std::endl;
 
@@ -138,7 +136,9 @@ void test_001()
     auto tmp_7 = fn7(1, 3.1415f, 2.7, 'B');
     auto tmp_8 = fn8(1, 3.1415f, 2.7, 'C');
     auto tmp_9 = fn9('D', 12345);
+#if !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
     fn10();
+#endif
 
     std::cout << "fn2() = " << tmp_2 << std::endl;
     std::cout << "fn7() = " << tmp_7 << std::endl;
@@ -204,7 +204,9 @@ void test_001()
 
     auto fn44 = embed::make_function(t1_009_return_a_class);
 
+#if !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
     auto fn45 = embed::make_function(t1_010_struct_non_copyable{});
+#endif
 
     auto fn46 = embed::make_function(&t1_005_callable_struct::member_func);
 
@@ -237,7 +239,9 @@ void test_001()
     fn42(42, 4200.1);
     fn43(43, 4300.1);
     fn44(44);
+#if !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
     fn45();
+#endif
     fn46(struct__001, 'H', 46);
     fn47(struct__001, 'I', 47);
     fn48(struct__001, 'J', 48);
@@ -281,7 +285,7 @@ void test_001()
 
 #endif // C++17
 
-    std::cout << "[END - test_001] : " GREEN "OK" RESET "\n\n" << std::endl;
+    std::cout << "[END - test_001] : ------ "  "OK"  " ------\n\n" << std::endl;
 #if defined(_MSC_VER)
 # pragma warning(pop)
 #endif

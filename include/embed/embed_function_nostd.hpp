@@ -43,7 +43,7 @@
 
 /// @c EMBED_NORETURN
 #ifndef EMBED_NORETURN
-# if defined(__GNUC__) || defined(__clang__)
+# if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
 #  define EMBED_NORETURN __attribute__((__noreturn__))
 # elif defined(_MSC_VER)
 #  define EMBED_NORETURN __declspec(noreturn)
@@ -52,7 +52,7 @@
 # endif
 #endif
 
-namespace embed { namespace _fn_no_std {
+namespace embed { namespace detail { namespace fn_no_std {
 
   // std::size_t
   using size_t = decltype(sizeof(int));
@@ -287,7 +287,7 @@ namespace embed { namespace _fn_no_std {
   // std::is_copy_constructible
   // this is a very important trait. If `__is_constructible` cannot be used,
   // the non-copyable object cannot be wrapped into embed::Fn.
-#if EMBED_HAS_BUILTIN(__is_constructible) || defined(__GNUC__) || defined(_MSC_VER)
+#if EMBED_HAS_BUILTIN(__is_constructible)
   template <class _Tp>
   struct is_copy_constructible
   : public integral_constant<bool, __is_constructible(_Tp, __add_lvalue_reference_t<const _Tp>)> {};
@@ -295,6 +295,7 @@ namespace embed { namespace _fn_no_std {
   template <class _Tp>
   struct is_copy_constructible
   : public true_type {};
+# define EMBED_NO_NONCOPYABLE_FUNCTOR
 #endif
 
   // std::is_nothrow_copy_constructible
@@ -569,7 +570,13 @@ namespace embed { namespace _fn_no_std {
     __y = move(__t);
   }
 
-} } // end namespace embed::_no_std
+} } } // end namespace embed::detail::fn_no_std
+
+EMBED_NODISCARD void* 
+operator new(decltype(sizeof(int)), void* __p) noexcept;
+
+EMBED_NODISCARD void* 
+operator new[](decltype(sizeof(int)), void* __p) noexcept;
 
 #endif // EMBED_FUNCTION_NOSTD_HPP__
 

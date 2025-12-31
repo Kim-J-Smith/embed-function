@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.5
+ * @version     1.0.6
  * 
  * @date        2025-12-6
  * 
@@ -48,7 +48,7 @@ SOFTWARE.
  * After careful consideration, `embed::function` does not plan to implement
  * the `target_type()` and `target()` member functions. The main reason for 
  * the former is that it relies on RTTI, which is often disabled in the embedded 
- * domain. The latter is due to the reason of thread-safe access isolation
+ * domain. The latter is due to the reason of thread-safe access isolation.
  * (more details: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4159.pdf)
  * 
  * By default, the space occupied by a single instance is only the size of
@@ -110,7 +110,9 @@ SOFTWARE.
 
 /// @note User can customize following configs
 
-// need fast call or not (fast call consume more RAM)
+// Need fast call or not (fast call consume more RAM).
+// The rate of function calls is improved by about 65% when fast-call is enabled.
+// With fast-call enabled, each instance of embed::function uses an extra pointer-sized RAM.
 #define EMBED_FN_NEED_FAST_CALL     false
 
 // assert nothrow callable function
@@ -164,12 +166,12 @@ SOFTWARE.
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  if defined(_MSC_VER)
 #   pragma message("[WARNING]: You are using c++ exception, which may consume more ROM.\
- Try not use `/EHs-c- /D _HAS_EXCEPTIONS=0 /wd4577` to disable the exception. Or if you exactly\
- want to enable the exception, then please use `/D EMBED_NO_WARNING=1` to ignore this warning.")
+ Try not use '/EHs-c- /D _HAS_EXCEPTIONS=0 /wd4577' to disable the exception. Or if you exactly\
+ want to enable the exception, then please use '/D EMBED_NO_WARNING=1' to ignore this warning.")
 #  else
 #   warning You are using c++ exception, which may consume more ROM.\
- Try use `-fno-exceptions` to disable the exception. Or if you exactly\
- want to enable the exception, then please use `-DEMBED_NO_WARNING=1` to ignore this warning.
+ Try use '-fno-exceptions' to disable the exception. Or if you exactly\
+ want to enable the exception, then please use '-DEMBED_NO_WARNING=1' to ignore this warning.
 #  endif
 # endif
 #endif
@@ -235,10 +237,36 @@ SOFTWARE.
 # endif
 #endif
 
+/// @c EMBED_UNUSED
+#ifndef EMBED_UNUSED
+# if EMBED_CXX_VERSION >= 201703L
+#  define EMBED_UNUSED [[maybe_unused]]
+# elif defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
+#  define EMBED_UNUSED __attribute__((unused))
+# else
+#  define EMBED_UNUSED
+# endif
+#endif
+
+/// @c EMBED_EXPECT @c EMBED_NOT_EXPECT
+#ifndef EMBED_EXPECT
+# if EMBED_CXX_VERSION >= 202002L
+#  define EMBED_EXPECT(condition) (condition) [[likely]]
+#  define EMBED_NOT_EXPECT(condition) (condition) [[unlikely]]
+# elif defined(__GNUC__) || defined(__clang__)
+#  define EMBED_EXPECT(condition) (__builtin_expect(static_cast<bool>(condition), 1))
+#  define EMBED_NOT_EXPECT(condition) (__builtin_expect(static_cast<bool>(condition), 0))
+# else
+#  define EMBED_EXPECT(condition) (condition)
+#  define EMBED_NOT_EXPECT(condition) (condition)
+# endif
+#endif
+
 // Header files
 #if EMBED_CXX_VERSION >= 201103L
 # ifndef EMBED_NO_STD_HEADER
 #  include <cstddef> // std::size_t
+#  include <new> // placement new
 #  include <utility> // std::move, std::forward, std::addressof
 #  include <type_traits>
 #  include <exception>
@@ -246,24 +274,23 @@ SOFTWARE.
 /// @brief In some extreme cases, users cannot use standard header files.
 /// Here, alternative solutions are provided.
 #  include "embed_function_nostd.hpp"
-#  define std _fn_no_std
+#  define std detail::fn_no_std
 # endif
 #else
 # error embed_func need C++11 or greater version, try use '-std=c++11'.
 #endif
 
 ////////////////////////////////////////////////////////////////
-namespace embed
-{
+namespace embed { namespace detail {
 
   /// @note User can customize following configs
 
   // the default buffer size for `embed::Fn`.
-  constexpr std::size_t _FnDefaultBufSize = (1 * sizeof(void*));
+  constexpr std::size_t FnDefaultBufSize = (1 * sizeof(void*));
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] static EMBED_INLINE void __bad_function_call_handler()
+  [[noreturn]] EMBED_UNUSED static EMBED_INLINE void bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -274,7 +301,7 @@ namespace embed
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] static EMBED_INLINE void __bad_function_copy_handler()
+  [[noreturn]] EMBED_UNUSED static EMBED_INLINE void bad_function_copy_handler()
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
@@ -283,7 +310,7 @@ namespace embed
     std::terminate(); // Terminate the program
   }
 
-}
+} } // end namespace embed::detail
 ////////////////////////////////////////////////////////////////
 
 namespace embed EMBED_ABI_VISIBILITY(default)
@@ -291,6 +318,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   // declare ahead
   template <typename Signature, std::size_t BufSize>
   class Fn;
+
+namespace detail {
 
   /**
    *  @brief Exception class thrown when class template function's
@@ -302,40 +331,40 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     bad_function_call()                                     = default;
     bad_function_call(const bad_function_call&)             = default;
     bad_function_call& operator=(const bad_function_call&)  = default;
+    ~bad_function_call() override                           = default;
 
-    virtual ~bad_function_call() noexcept override {};
     const char* what() const noexcept override
     {
       return "embed::Fn::operator() is called with an empty target";
     };
   };
 
-  /// @c _throw_bad_function_call
+  /// @c throw_bad_function_call
   // For private use only.
-  [[noreturn]] static inline void _throw_bad_function_call()
+  [[noreturn]] static inline void throw_bad_function_call()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
 #else
-    __bad_function_call_handler();
+    bad_function_call_handler();
 #endif
   }
 
-  /// @c _FnBufType
+  /// @c FnBufType
   /// @brief Anchor the size of the objects that the embed::Fn can store.
   template <std::size_t BufSize>
-  union _FnBufType
+  union FnBufType
   {
     void*       vPtr;
     const void* cvPtr;
-    void (* fPtr) (void);
+    void (* fPtr) ();
 
     char        buf[BufSize];
   };
 
-  /// @c _FnFunctor
+  /// @c FnFunctor
   template <std::size_t BufSize>
-  union EMBED_ALIAS _FnFunctor
+  union EMBED_ALIAS FnFunctor
   {
     void* M_access() noexcept { return &M_pod_data[0]; }
     const void* M_access() const noexcept { return &M_pod_data[0]; }
@@ -346,13 +375,13 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     const T& M_access() const noexcept
     { return *static_cast<const T*>(M_access()); }
 
-    _FnBufType<BufSize>   M_unused;
-    char                  M_pod_data[sizeof(_FnBufType<BufSize>)];
+    FnBufType<BufSize>   M_unused;
+    char                  M_pod_data[sizeof(FnBufType<BufSize>)];
   };
 
-  /// @c _FnToolBox
+  /// @c FnToolBox
   /// @brief Tool Box for embed::Fn
-  class _FnToolBox
+  class FnToolBox
   {
   public:
 
@@ -381,7 +410,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @c FnInvoker is aimed to help Fn call the functor.
     /// When @b EMBED_FN_NEED_FAST_CALL is false, FnManager
     /// will help Fn call the functor instead of FnInvoker,
-    /// which will save the RAM, but is more slower than FnInvoker.
+    /// which will save the RAM, but is slower than FnInvoker.
     template <typename Signature, typename Functor, std::size_t BufSize>
     struct FnInvoker;
 
@@ -396,10 +425,10 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 
   /**
-   * @c _FnToolBox::FnTraits
+   * @c FnToolBox::FnTraits
    * @brief Provide necessary type traits.
    */
-  struct _FnToolBox::FnTraits
+  struct FnToolBox::FnTraits
   {
     /// @e aligned_buf_size
     template <std::size_t BufSize>
@@ -421,7 +450,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     template <typename To, typename From>
     struct reference_converts_from_temporary
     {
-      using ncvref_To = typename std::remove_cv<
+      using no_cvref_To = typename std::remove_cv<
         typename std::remove_reference<To>::type
       >::type;
 
@@ -429,12 +458,12 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       static constexpr bool pr_to_l = std::is_lvalue_reference<To>::value
         && !std::is_reference<From>::value
         && std::is_const<typename std::remove_reference<To>::type>::value
-        && std::is_convertible<From, ncvref_To>::value;
+        && std::is_convertible<From, no_cvref_To>::value;
 
       // prvalue is being bound to [const] xvalue(right reference)
       static constexpr bool pr_to_x = std::is_rvalue_reference<To>::value
         && !std::is_reference<From>::value
-        && std::is_convertible<From, ncvref_To>::value;
+        && std::is_convertible<From, no_cvref_To>::value;
 
       static constexpr bool value = pr_to_l || pr_to_x;
     };
@@ -594,7 +623,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     };
 
     template <typename ArgsPackageFrom, typename ArgsPackageTo>
-    struct arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, (std::size_t)-1>
+    struct arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, static_cast<std::size_t>(-1)>
     { static constexpr bool value = false; };
 
     /// @e arguments_are_same
@@ -667,6 +696,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #if ( __cpp_explicit_this_parameter >= 202110L ) || ( EMBED_CXX_VERSION >= 202302L )
 
     // 3617. function/packaged_task deduction guides and deducing this.
+    // See https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2021/p0847r7.html
 
     template <typename ThisType, typename Ret, typename... ArgsType>
     struct get_unique_call_signature_impl<Ret (*) (ThisType, ArgsType...)>
@@ -761,18 +791,18 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 
   /**
-   * @c _FnToolBox::FnManager
+   * @c FnToolBox::FnManager
    * @brief Manage the functor for embed::Fn.
    */
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct _FnToolBox::FnManager<RetType(ArgsType...), Functor, BufSize>
+  struct FnToolBox::FnManager<RetType(ArgsType...), Functor, BufSize>
   {
   public:  
-    constexpr static std::size_t M_max_size = sizeof(_FnBufType<BufSize>);
-    constexpr static std::size_t M_max_align = alignof(_FnBufType<BufSize>);
+    constexpr static std::size_t M_max_size = sizeof(FnBufType<BufSize>);
+    constexpr static std::size_t M_max_align = alignof(FnBufType<BufSize>);
 
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const _FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
 
     /// @e Local_Storage
     /// @brief Judge the functor is small or big.
@@ -804,13 +834,13 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// Q: Why not use Functor, but use the `Func`?
     /// A: Because this is perfect forward, need compiler deduce `Func` instead of specify it.
     template <typename Func>
-    static void M_create(_FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    static void M_create(FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
       ::new (dest.M_access()) Functor(std::forward<Func>(functor));
     }
 
     /// @e M_destroy
-    static void M_destroy(_FnFunctor<BufSize>& victim) noexcept
+    static void M_destroy(FnFunctor<BufSize>& victim) noexcept
     {
       victim.template M_access<Functor>().~Functor();
     }
@@ -819,7 +849,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @e M_get_pointer
     // break the `const` promises.
     static Functor*
-    M_get_pointer(const _FnFunctor<BufSize>& src) noexcept
+    M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
       const Functor& fn = src.template M_access<Functor>();
       return const_cast<Functor*>(std::addressof(fn));
@@ -845,7 +875,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @e M_init_functor
     // init functor by using M_create (perfect forward)
     template <typename Func>
-    static void M_init_functor(_FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    static void M_init_functor(FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
       M_create(dest, std::forward<Func>(functor));
     }
@@ -855,7 +885,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @e M_invoke
     // This function only used when we expect FnManager to help Fn
     // call the functor instead of FnInvoker.
-    static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
+    static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
       return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
@@ -867,7 +897,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @e M_manager
     // Core func to manager functor.
     static Invoker_Type
-    M_manager(_FnFunctor<BufSize>& dest, const _FnFunctor<BufSize>& src, manOpcode op) noexcept
+    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, manOpcode op) noexcept
     {
       Invoker_Type invoker = nullptr;
 
@@ -901,22 +931,22 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #if (EMBED_FN_NEED_FAST_CALL == true)
 
   /**
-   * @c _FnToolBox::FnInvoker
+   * @c FnToolBox::FnInvoker
    * @brief Invoke the functor for Fn.
    */
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct _FnToolBox::FnInvoker<RetType(ArgsType...), Functor, BufSize>
+  struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor, BufSize>
   {
   private:
     static Functor*
-    M_get_pointer(const _FnFunctor<BufSize>& src) noexcept
+    M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
       const Functor& fn = src.template M_access<Functor>();
       return const_cast<Functor*>(std::addressof(fn));
     }
   public:
 
-    static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
+    static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
       return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
@@ -928,18 +958,18 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #endif
 
   /**
-   * @c _FnToolBox::FnNonCopyable
+   * @c FnToolBox::FnNonCopyable
    * @brief Manager non-copyable objects.
    */
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct _FnToolBox::FnNonCopyable<RetType(ArgsType...), Functor, BufSize>
+  struct FnToolBox::FnNonCopyable<RetType(ArgsType...), Functor, BufSize>
   {
   public:
-    constexpr static std::size_t M_max_size = sizeof(_FnBufType<BufSize>);
-    constexpr static std::size_t M_max_align = alignof(_FnBufType<BufSize>);
+    constexpr static std::size_t M_max_size = sizeof(FnBufType<BufSize>);
+    constexpr static std::size_t M_max_align = alignof(FnBufType<BufSize>);
 
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const _FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
 
     /// @e Local_Storage
     /// @brief Judge the functor is small or big.
@@ -969,13 +999,13 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   private:
     /// @e M_create
     template <typename Func>
-    static void M_create(_FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    static void M_create(FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
       ::new (dest.M_access()) Functor(std::move(functor));
     }
 
     /// @e M_destroy
-    static void M_destroy(_FnFunctor<BufSize>& victim) noexcept
+    static void M_destroy(FnFunctor<BufSize>& victim) noexcept
     {
       victim.template M_access<Functor>().~Functor();
     }
@@ -984,7 +1014,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @e M_get_pointer
     // break the `const` promises.
     static Functor*
-    M_get_pointer(const _FnFunctor<BufSize>& src) noexcept
+    M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
       const Functor& fn = src.template M_access<Functor>();
       return const_cast<Functor*>(std::addressof(fn));
@@ -1010,7 +1040,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @e M_init_functor
     // init functor by using M_create (perfect forward)
     template <typename Func>
-    static void M_init_functor(_FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    static void M_init_functor(FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
       M_create(dest, std::move(functor));
     }
@@ -1020,7 +1050,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @e M_invoke
     // This function only used when we expect FnManager to help Fn
     // call the functor instead of FnInvoker.
-    static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
+    static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
       return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
@@ -1032,7 +1062,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @e M_manager
     // Core func to manager functor.
     static Invoker_Type
-    M_manager(_FnFunctor<BufSize>& dest, const _FnFunctor<BufSize>& src, manOpcode op) noexcept
+    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, manOpcode op) noexcept
     {
       Invoker_Type invoker = nullptr;
 
@@ -1040,7 +1070,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       {
       case OP_clone_functor:
         /// @attention non-copyable object CANNOT clone!
-        __bad_function_copy_handler();
+        bad_function_copy_handler();
         break;
 
       case OP_move_functor:
@@ -1062,12 +1092,14 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     }
   };
 
+} // end namespace embed::detail
+
   /**
    * @brief   A light polymorphic wrapper for callable object.
    * @note    Only use stack memory. NO HEAP MEMORY!
    */
   template <typename RetType, std::size_t BufSize, typename... ArgsType>
-  class Fn<RetType(ArgsType...), BufSize> : private _FnToolBox
+  class Fn<RetType(ArgsType...), BufSize> : private detail::FnToolBox
   {
   private:
     template <typename Functor>
@@ -1094,26 +1126,26 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     template <typename Functor>
     using Callable = FnTraits::Callable<RetType, Functor, ArgsType...>;
 
-    using Invoker_Type = RetType (*) (const _FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const detail::FnFunctor<BufSize>&, ArgsType&&...);
 
     using Manager_Type = 
-      Invoker_Type (*) (_FnFunctor<BufSize>&, const _FnFunctor<BufSize>&, manOpcode) EMBED_CXX17_NOEXCEPT;
+      Invoker_Type (*) (detail::FnFunctor<BufSize>&, const detail::FnFunctor<BufSize>&, manOpcode) EMBED_CXX17_NOEXCEPT;
 
   private:
 
     // The `M_functor` store the callable object.
-    _FnFunctor<BufSize>   M_functor{};
+    detail::FnFunctor<BufSize>   M_functor{};
 
     // The `M_manager` describes how to move / copy / destroy the `M_functor`,
     // and even describes how to invoke `M_functor` when not using `M_invoker`.
-    Manager_Type          M_manager{};
+    Manager_Type                  M_manager{};
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
 
     // invoker for the functor (func pointer)
     /// IF @b EMBED_FN_NEED_FAST_CALL is not true, `M_manager` 
     /// will help Fn invoke functor instead of `M_invoker`.
-    Invoker_Type          M_invoker{};
+    Invoker_Type                  M_invoker{};
 
 #endif
 
@@ -1158,7 +1190,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     }
 
     // Create an empty function wrapper.
-    EMBED_INLINE Fn() noexcept {}
+    EMBED_INLINE Fn() noexcept = default;
 
     // Create an empty function wrapper.
     EMBED_INLINE Fn(std::nullptr_t) noexcept {}
@@ -1210,7 +1242,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
-          *reinterpret_cast<_FnFunctor<OtherSize>*>(&M_functor),
+          *reinterpret_cast<detail::FnFunctor<OtherSize>*>(&M_functor),
           fn.M_functor, OP_clone_functor
         );
         M_manager = reinterpret_cast<Manager_Type>(fn.M_manager);
@@ -1239,7 +1271,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         "embed::Fn require the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
-        "membed::Fn target must be copy-constructible");
+        "embed::Fn target must be copy-constructible");
 
       static_assert(std::is_nothrow_constructible<DecayFunctor, Functor>::value,
         "embed::Fn target must be NO-THROW constructible from the "
@@ -1248,11 +1280,14 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
-        M_manager = &Fn::MyManager<DecayFunctor>::M_manager;
-        M_invoker = &Fn::MyInvoker<DecayFunctor>::M_invoke;
+
+        // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
+        M_manager = (decltype(M_manager)) &Fn::MyManager<DecayFunctor>::M_manager;
+        M_invoker = (decltype(M_invoker)) &Fn::MyInvoker<DecayFunctor>::M_invoke;
       }
     }
 
+# if !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
     /**
      * @brief Constructor for non-copyable object.
      * @attention embed::Fn instance constructed from non-copyable object
@@ -1270,16 +1305,19 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
       {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
-        M_manager = &Fn::MyNonCopyable<DecayFunctor>::M_manager;
-        M_invoker = &Fn::MyInvoker<DecayFunctor>::M_invoke;
+
+        // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
+        M_manager = (decltype(M_manager)) &Fn::MyNonCopyable<DecayFunctor>::M_manager;
+        M_invoker = (decltype(M_invoker)) &Fn::MyInvoker<DecayFunctor>::M_invoke;
       }
     }
+# endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
 
-    // Swap Fn but unkown the real type of `Functor`.
+    // Swap Fn but unknown the real type of `Functor`.
     // But only M_manager remember the `Functor`.
     void swap(Fn& fn) noexcept
     {
-      _FnFunctor<BufSize> tmpFunc{};
+      detail::FnFunctor<BufSize> tmpFunc{};
       if (M_manager)
       {
         M_manager(tmpFunc, M_functor, OP_move_functor);
@@ -1304,10 +1342,10 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     RetType operator() (ArgsType... args) const
     EMBED_FN_CASE_NOEXCEPT
     {
-      if (M_invoker)
+      if EMBED_EXPECT(M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
-        _throw_bad_function_call(); /* may throw exception */
+        detail::throw_bad_function_call(); /* may throw exception */
     }
 #else
 
@@ -1353,7 +1391,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
-          *reinterpret_cast<_FnFunctor<OtherSize>*>(&M_functor),
+          *reinterpret_cast<detail::FnFunctor<OtherSize>*>(&M_functor),
           fn.M_functor, OP_clone_functor
         );
         M_manager = reinterpret_cast<Manager_Type>(fn.M_manager);
@@ -1381,7 +1419,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         "embed::Fn require the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
-        "membed::Fn target must be copy-constructible");
+        "embed::Fn target must be copy-constructible");
 
       static_assert(std::is_nothrow_constructible<DecayFunctor, Functor>::value,
         "embed::Fn target must be NO-THROW constructible from the "
@@ -1390,10 +1428,13 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
-        M_manager = &Fn::MyManager<DecayFunctor>::M_manager;
+
+        // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
+        M_manager = (decltype(M_manager)) &Fn::MyManager<DecayFunctor>::M_manager;
       }
     }
 
+# if !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
     /**
      * @brief Constructor for non-copyable object.
      * @attention embed::Fn instance constructed from non-copyable object
@@ -1411,15 +1452,18 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
       {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
-        M_manager = &Fn::MyNonCopyable<DecayFunctor>::M_manager;
+
+        // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
+        M_manager = (decltype(M_manager)) &Fn::MyNonCopyable<DecayFunctor>::M_manager;
       }
     }
+# endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
 
-    // Swap Fn but unkown the real type of `Functor`.
+    // Swap Fn but unknown the real type of `Functor`.
     // But only M_manager remember the `Functor`.
     void swap(Fn& fn) noexcept
     {
-      _FnFunctor<BufSize> tmpFunc{};
+      detail::FnFunctor<BufSize> tmpFunc{};
       if (M_manager)
       {
         M_manager(tmpFunc, M_functor, OP_move_functor);
@@ -1451,13 +1495,13 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     RetType operator() (ArgsType... args) const
     EMBED_FN_CASE_NOEXCEPT
     {
-      if (M_manager) {
-        _FnFunctor<BufSize> nil;
+      if EMBED_EXPECT(M_manager) {
+        detail::FnFunctor<BufSize> nil;
         Invoker_Type invoker = M_manager(nil, nil, OP_get_invoker);
         return invoker(M_functor, std::forward<ArgsType>(args)...);
       }
       else
-        _throw_bad_function_call(); /* may throw exception */
+        detail::throw_bad_function_call(); /* may throw exception */
     }
 
 # if defined(__clang__)
@@ -1468,7 +1512,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 #endif // End EMBED_FN_NEED_FAST_CALL == true or not
 
-    /// @attention operator= may cunsume more resource,
+    /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(const Fn& fn) noexcept
     {
@@ -1476,7 +1520,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @attention operator= may cunsume more resource,
+    /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(Fn&& fn) noexcept
     {
@@ -1485,7 +1529,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @attention operator= may cunsume more resource,
+    /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     template <typename RetT, std::size_t OtherBufSize, typename... ArgsT>
     EMBED_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
@@ -1502,7 +1546,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @attention operator= may cunsume more resource,
+    /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     template <typename Functor,
       typename DecayFunc = Fn::DecayFunc_t<Functor> >
@@ -1557,8 +1601,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
    * @note It is encouraged to use `embed::function` instead of `embed::Fn`.
    * `embed::function` will automatically align the BufSize.
    */
-  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
-  using function = Fn<Signature, _FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
+  template <typename Signature, std::size_t BufSize = detail::FnDefaultBufSize>
+  using function = Fn<Signature, detail::FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
 
   /**
    * @brief Make a function and automatically calculate the required size.
@@ -1566,7 +1610,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
    */
   template <typename Signature, typename Functor>
   EMBED_NODISCARD inline typename std::enable_if<
-    !_FnToolBox::FnTraits::is_Fn_and_similar<
+    !detail::FnToolBox::FnTraits::is_Fn_and_similar<
       Signature,
       typename std::remove_const<
         typename std::remove_reference<Functor>::type
@@ -1580,13 +1624,13 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   }
 
   // Overload for empty.
-  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
+  template <typename Signature, std::size_t BufSize = detail::FnDefaultBufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function() noexcept
   { return function<Signature, BufSize>(); }
 
   // Overload for nullptr.
-  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
+  template <typename Signature, std::size_t BufSize = detail::FnDefaultBufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function(std::nullptr_t) noexcept
   { return function<Signature>(nullptr); }
@@ -1614,10 +1658,10 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       typename std::remove_reference<Lambda>::type
     >::type,
     typename Signature = typename 
-    _FnToolBox::FnTraits::get_unique_call_signature<ClassType>::type
+    detail::FnToolBox::FnTraits::get_unique_call_signature<ClassType>::type
   >
   EMBED_NODISCARD inline typename std::enable_if<
-    _FnToolBox::FnTraits::is_unique_callable<ClassType>::value,
+    detail::FnToolBox::FnTraits::is_unique_callable<ClassType>::value,
     function<Signature, sizeof(Lambda)>
   >::type
   make_function(Lambda&& la) noexcept
@@ -1644,11 +1688,11 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   // Overload for `embed::Fn<Other, Size>`.
   template <typename Signature, typename OtherRet, std::size_t BufSize, typename... OtherArgs>
   EMBED_NODISCARD inline typename std::enable_if<
-    _FnToolBox::FnTraits::is_similar_Fn<
-      typename _FnToolBox::FnTraits::unwrap_signature<Signature>::ret,
-      typename _FnToolBox::FnTraits::unwrap_signature<Signature>::args,
-      _FnToolBox::FnTraits::unwrap_signature<Signature>::arg_num,
-      BufSize, OtherRet, _FnToolBox::FnTraits::args_package<OtherArgs...>,
+    detail::FnToolBox::FnTraits::is_similar_Fn<
+      typename detail::FnToolBox::FnTraits::unwrap_signature<Signature>::ret,
+      typename detail::FnToolBox::FnTraits::unwrap_signature<Signature>::args,
+      detail::FnToolBox::FnTraits::unwrap_signature<Signature>::arg_num,
+      BufSize, OtherRet, detail::FnToolBox::FnTraits::args_package<OtherArgs...>,
       sizeof... (OtherArgs), BufSize
     >::value,
     function<Signature, BufSize>
@@ -1713,26 +1757,29 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #if ( __cpp_deduction_guides >= 201606 ) || ( EMBED_CXX_VERSION >= 201703L )
 
   // Deduce the template type.
+namespace detail {
 
   template <typename Functor>
-  struct __function_deduce_guide_helper
+  struct function_deduce_guide_helper
   {
     using type = decltype(make_function(std::declval<Functor>()));
   };
 
-  template <typename T> struct __function_deduce_get_signature;
+  template <typename T> struct function_deduce_get_signature;
 
   template <typename Sig, std::size_t Buf>
-  struct __function_deduce_get_signature<Fn<Sig, Buf>>
+  struct function_deduce_get_signature<Fn<Sig, Buf>>
   {
     using signature = Sig;
     static constexpr std::size_t bufsize = Buf;
   };
 
+} // end namespace embed::detail
+
   template <typename Functor,
-    typename DeduceRet = typename __function_deduce_guide_helper<Functor>::type,
-    typename Signature = typename __function_deduce_get_signature<DeduceRet>::signature,
-    std::size_t BufferSize = __function_deduce_get_signature<DeduceRet>::bufsize>
+    typename DeduceRet = typename detail::function_deduce_guide_helper<Functor>::type,
+    typename Signature = typename detail::function_deduce_get_signature<DeduceRet>::signature,
+    std::size_t BufferSize = detail::function_deduce_get_signature<DeduceRet>::bufsize>
   Fn(Functor) -> Fn<Signature, BufferSize>;
 
 #endif
