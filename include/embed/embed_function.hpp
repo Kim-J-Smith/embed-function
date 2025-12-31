@@ -237,7 +237,9 @@ SOFTWARE.
 
 /// @c EMBED_UNUSED
 #ifndef EMBED_UNUSED
-# if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
+# if EMBED_CXX_VERSION >= 201703L
+#  define EMBED_UNUSED [[maybe_unused]]
+# elif defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
 #  define EMBED_UNUSED __attribute__((unused))
 # else
 #  define EMBED_UNUSED
@@ -270,7 +272,7 @@ SOFTWARE.
 /// @brief In some extreme cases, users cannot use standard header files.
 /// Here, alternative solutions are provided.
 #  include "embed_function_nostd.hpp"
-#  define std _fn_no_std
+#  define std detail::fn_no_std
 # endif
 #else
 # error embed_func need C++11 or greater version, try use '-std=c++11'.
@@ -286,7 +288,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] static EMBED_INLINE EMBED_UNUSED void bad_function_call_handler()
+  [[noreturn]] EMBED_UNUSED static EMBED_INLINE void bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -297,7 +299,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] static EMBED_INLINE EMBED_UNUSED void bad_function_copy_handler()
+  [[noreturn]] EMBED_UNUSED static EMBED_INLINE void bad_function_copy_handler()
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
@@ -335,9 +337,9 @@ namespace detail {
     };
   };
 
-  /// @c _throw_bad_function_call
+  /// @c throw_bad_function_call
   // For private use only.
-  [[noreturn]] static inline void _throw_bad_function_call()
+  [[noreturn]] static inline void throw_bad_function_call()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
@@ -346,10 +348,10 @@ namespace detail {
 #endif
   }
 
-  /// @c _FnBufType
+  /// @c FnBufType
   /// @brief Anchor the size of the objects that the embed::Fn can store.
   template <std::size_t BufSize>
-  union _FnBufType
+  union FnBufType
   {
     void*       vPtr;
     const void* cvPtr;
@@ -358,9 +360,9 @@ namespace detail {
     char        buf[BufSize];
   };
 
-  /// @c _FnFunctor
+  /// @c FnFunctor
   template <std::size_t BufSize>
-  union EMBED_ALIAS _FnFunctor
+  union EMBED_ALIAS FnFunctor
   {
     void* M_access() noexcept { return &M_pod_data[0]; }
     const void* M_access() const noexcept { return &M_pod_data[0]; }
@@ -371,13 +373,13 @@ namespace detail {
     const T& M_access() const noexcept
     { return *static_cast<const T*>(M_access()); }
 
-    _FnBufType<BufSize>   M_unused;
-    char                  M_pod_data[sizeof(_FnBufType<BufSize>)];
+    FnBufType<BufSize>   M_unused;
+    char                  M_pod_data[sizeof(FnBufType<BufSize>)];
   };
 
-  /// @c _FnToolBox
+  /// @c FnToolBox
   /// @brief Tool Box for embed::Fn
-  class _FnToolBox
+  class FnToolBox
   {
   public:
 
@@ -421,10 +423,10 @@ namespace detail {
 
 
   /**
-   * @c _FnToolBox::FnTraits
+   * @c FnToolBox::FnTraits
    * @brief Provide necessary type traits.
    */
-  struct _FnToolBox::FnTraits
+  struct FnToolBox::FnTraits
   {
     /// @e aligned_buf_size
     template <std::size_t BufSize>
@@ -787,18 +789,18 @@ namespace detail {
 
 
   /**
-   * @c _FnToolBox::FnManager
+   * @c FnToolBox::FnManager
    * @brief Manage the functor for embed::Fn.
    */
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct _FnToolBox::FnManager<RetType(ArgsType...), Functor, BufSize>
+  struct FnToolBox::FnManager<RetType(ArgsType...), Functor, BufSize>
   {
   public:  
-    constexpr static std::size_t M_max_size = sizeof(_FnBufType<BufSize>);
-    constexpr static std::size_t M_max_align = alignof(_FnBufType<BufSize>);
+    constexpr static std::size_t M_max_size = sizeof(FnBufType<BufSize>);
+    constexpr static std::size_t M_max_align = alignof(FnBufType<BufSize>);
 
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const _FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
 
     /// @e Local_Storage
     /// @brief Judge the functor is small or big.
@@ -830,13 +832,13 @@ namespace detail {
     /// Q: Why not use Functor, but use the `Func`?
     /// A: Because this is perfect forward, need compiler deduce `Func` instead of specify it.
     template <typename Func>
-    static void M_create(_FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    static void M_create(FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
       ::new (dest.M_access()) Functor(std::forward<Func>(functor));
     }
 
     /// @e M_destroy
-    static void M_destroy(_FnFunctor<BufSize>& victim) noexcept
+    static void M_destroy(FnFunctor<BufSize>& victim) noexcept
     {
       victim.template M_access<Functor>().~Functor();
     }
@@ -845,7 +847,7 @@ namespace detail {
     /// @e M_get_pointer
     // break the `const` promises.
     static Functor*
-    M_get_pointer(const _FnFunctor<BufSize>& src) noexcept
+    M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
       const Functor& fn = src.template M_access<Functor>();
       return const_cast<Functor*>(std::addressof(fn));
@@ -871,7 +873,7 @@ namespace detail {
     /// @e M_init_functor
     // init functor by using M_create (perfect forward)
     template <typename Func>
-    static void M_init_functor(_FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    static void M_init_functor(FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
       M_create(dest, std::forward<Func>(functor));
     }
@@ -881,7 +883,7 @@ namespace detail {
     /// @e M_invoke
     // This function only used when we expect FnManager to help Fn
     // call the functor instead of FnInvoker.
-    static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
+    static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
       return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
@@ -893,7 +895,7 @@ namespace detail {
     /// @e M_manager
     // Core func to manager functor.
     static Invoker_Type
-    M_manager(_FnFunctor<BufSize>& dest, const _FnFunctor<BufSize>& src, manOpcode op) noexcept
+    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, manOpcode op) noexcept
     {
       Invoker_Type invoker = nullptr;
 
@@ -927,22 +929,22 @@ namespace detail {
 #if (EMBED_FN_NEED_FAST_CALL == true)
 
   /**
-   * @c _FnToolBox::FnInvoker
+   * @c FnToolBox::FnInvoker
    * @brief Invoke the functor for Fn.
    */
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct _FnToolBox::FnInvoker<RetType(ArgsType...), Functor, BufSize>
+  struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor, BufSize>
   {
   private:
     static Functor*
-    M_get_pointer(const _FnFunctor<BufSize>& src) noexcept
+    M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
       const Functor& fn = src.template M_access<Functor>();
       return const_cast<Functor*>(std::addressof(fn));
     }
   public:
 
-    static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
+    static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
       return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
@@ -954,18 +956,18 @@ namespace detail {
 #endif
 
   /**
-   * @c _FnToolBox::FnNonCopyable
+   * @c FnToolBox::FnNonCopyable
    * @brief Manager non-copyable objects.
    */
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct _FnToolBox::FnNonCopyable<RetType(ArgsType...), Functor, BufSize>
+  struct FnToolBox::FnNonCopyable<RetType(ArgsType...), Functor, BufSize>
   {
   public:
-    constexpr static std::size_t M_max_size = sizeof(_FnBufType<BufSize>);
-    constexpr static std::size_t M_max_align = alignof(_FnBufType<BufSize>);
+    constexpr static std::size_t M_max_size = sizeof(FnBufType<BufSize>);
+    constexpr static std::size_t M_max_align = alignof(FnBufType<BufSize>);
 
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const _FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
 
     /// @e Local_Storage
     /// @brief Judge the functor is small or big.
@@ -995,13 +997,13 @@ namespace detail {
   private:
     /// @e M_create
     template <typename Func>
-    static void M_create(_FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    static void M_create(FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
       ::new (dest.M_access()) Functor(std::move(functor));
     }
 
     /// @e M_destroy
-    static void M_destroy(_FnFunctor<BufSize>& victim) noexcept
+    static void M_destroy(FnFunctor<BufSize>& victim) noexcept
     {
       victim.template M_access<Functor>().~Functor();
     }
@@ -1010,7 +1012,7 @@ namespace detail {
     /// @e M_get_pointer
     // break the `const` promises.
     static Functor*
-    M_get_pointer(const _FnFunctor<BufSize>& src) noexcept
+    M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
       const Functor& fn = src.template M_access<Functor>();
       return const_cast<Functor*>(std::addressof(fn));
@@ -1036,7 +1038,7 @@ namespace detail {
     /// @e M_init_functor
     // init functor by using M_create (perfect forward)
     template <typename Func>
-    static void M_init_functor(_FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    static void M_init_functor(FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
       M_create(dest, std::move(functor));
     }
@@ -1046,7 +1048,7 @@ namespace detail {
     /// @e M_invoke
     // This function only used when we expect FnManager to help Fn
     // call the functor instead of FnInvoker.
-    static RetType M_invoke(const _FnFunctor<BufSize>& functor, ArgsType&&... args)
+    static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
       return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
@@ -1058,7 +1060,7 @@ namespace detail {
     /// @e M_manager
     // Core func to manager functor.
     static Invoker_Type
-    M_manager(_FnFunctor<BufSize>& dest, const _FnFunctor<BufSize>& src, manOpcode op) noexcept
+    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, manOpcode op) noexcept
     {
       Invoker_Type invoker = nullptr;
 
@@ -1095,7 +1097,7 @@ namespace detail {
    * @note    Only use stack memory. NO HEAP MEMORY!
    */
   template <typename RetType, std::size_t BufSize, typename... ArgsType>
-  class Fn<RetType(ArgsType...), BufSize> : private detail::_FnToolBox
+  class Fn<RetType(ArgsType...), BufSize> : private detail::FnToolBox
   {
   private:
     template <typename Functor>
@@ -1122,15 +1124,15 @@ namespace detail {
     template <typename Functor>
     using Callable = FnTraits::Callable<RetType, Functor, ArgsType...>;
 
-    using Invoker_Type = RetType (*) (const detail::_FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const detail::FnFunctor<BufSize>&, ArgsType&&...);
 
     using Manager_Type = 
-      Invoker_Type (*) (detail::_FnFunctor<BufSize>&, const detail::_FnFunctor<BufSize>&, manOpcode) EMBED_CXX17_NOEXCEPT;
+      Invoker_Type (*) (detail::FnFunctor<BufSize>&, const detail::FnFunctor<BufSize>&, manOpcode) EMBED_CXX17_NOEXCEPT;
 
   private:
 
     // The `M_functor` store the callable object.
-    detail::_FnFunctor<BufSize>   M_functor{};
+    detail::FnFunctor<BufSize>   M_functor{};
 
     // The `M_manager` describes how to move / copy / destroy the `M_functor`,
     // and even describes how to invoke `M_functor` when not using `M_invoker`.
@@ -1238,7 +1240,7 @@ namespace detail {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
-          *reinterpret_cast<detail::_FnFunctor<OtherSize>*>(&M_functor),
+          *reinterpret_cast<detail::FnFunctor<OtherSize>*>(&M_functor),
           fn.M_functor, OP_clone_functor
         );
         M_manager = reinterpret_cast<Manager_Type>(fn.M_manager);
@@ -1313,7 +1315,7 @@ namespace detail {
     // But only M_manager remember the `Functor`.
     void swap(Fn& fn) noexcept
     {
-      detail::_FnFunctor<BufSize> tmpFunc{};
+      detail::FnFunctor<BufSize> tmpFunc{};
       if (M_manager)
       {
         M_manager(tmpFunc, M_functor, OP_move_functor);
@@ -1341,7 +1343,7 @@ namespace detail {
       if EMBED_EXPECT(M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
-        detail::_throw_bad_function_call(); /* may throw exception */
+        detail::throw_bad_function_call(); /* may throw exception */
     }
 #else
 
@@ -1387,7 +1389,7 @@ namespace detail {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
-          *reinterpret_cast<detail::_FnFunctor<OtherSize>*>(&M_functor),
+          *reinterpret_cast<detail::FnFunctor<OtherSize>*>(&M_functor),
           fn.M_functor, OP_clone_functor
         );
         M_manager = reinterpret_cast<Manager_Type>(fn.M_manager);
@@ -1459,7 +1461,7 @@ namespace detail {
     // But only M_manager remember the `Functor`.
     void swap(Fn& fn) noexcept
     {
-      detail::_FnFunctor<BufSize> tmpFunc{};
+      detail::FnFunctor<BufSize> tmpFunc{};
       if (M_manager)
       {
         M_manager(tmpFunc, M_functor, OP_move_functor);
@@ -1492,12 +1494,12 @@ namespace detail {
     EMBED_FN_CASE_NOEXCEPT
     {
       if EMBED_EXPECT(M_manager) {
-        detail::_FnFunctor<BufSize> nil;
+        detail::FnFunctor<BufSize> nil;
         Invoker_Type invoker = M_manager(nil, nil, OP_get_invoker);
         return invoker(M_functor, std::forward<ArgsType>(args)...);
       }
       else
-        detail::_throw_bad_function_call(); /* may throw exception */
+        detail::throw_bad_function_call(); /* may throw exception */
     }
 
 # if defined(__clang__)
@@ -1598,7 +1600,7 @@ namespace detail {
    * `embed::function` will automatically align the BufSize.
    */
   template <typename Signature, std::size_t BufSize = detail::FnDefaultBufSize>
-  using function = Fn<Signature, detail::_FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
+  using function = Fn<Signature, detail::FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
 
   /**
    * @brief Make a function and automatically calculate the required size.
@@ -1606,7 +1608,7 @@ namespace detail {
    */
   template <typename Signature, typename Functor>
   EMBED_NODISCARD inline typename std::enable_if<
-    !detail::_FnToolBox::FnTraits::is_Fn_and_similar<
+    !detail::FnToolBox::FnTraits::is_Fn_and_similar<
       Signature,
       typename std::remove_const<
         typename std::remove_reference<Functor>::type
@@ -1654,10 +1656,10 @@ namespace detail {
       typename std::remove_reference<Lambda>::type
     >::type,
     typename Signature = typename 
-    detail::_FnToolBox::FnTraits::get_unique_call_signature<ClassType>::type
+    detail::FnToolBox::FnTraits::get_unique_call_signature<ClassType>::type
   >
   EMBED_NODISCARD inline typename std::enable_if<
-    detail::_FnToolBox::FnTraits::is_unique_callable<ClassType>::value,
+    detail::FnToolBox::FnTraits::is_unique_callable<ClassType>::value,
     function<Signature, sizeof(Lambda)>
   >::type
   make_function(Lambda&& la) noexcept
@@ -1684,11 +1686,11 @@ namespace detail {
   // Overload for `embed::Fn<Other, Size>`.
   template <typename Signature, typename OtherRet, std::size_t BufSize, typename... OtherArgs>
   EMBED_NODISCARD inline typename std::enable_if<
-    detail::_FnToolBox::FnTraits::is_similar_Fn<
-      typename detail::_FnToolBox::FnTraits::unwrap_signature<Signature>::ret,
-      typename detail::_FnToolBox::FnTraits::unwrap_signature<Signature>::args,
-      detail::_FnToolBox::FnTraits::unwrap_signature<Signature>::arg_num,
-      BufSize, OtherRet, detail::_FnToolBox::FnTraits::args_package<OtherArgs...>,
+    detail::FnToolBox::FnTraits::is_similar_Fn<
+      typename detail::FnToolBox::FnTraits::unwrap_signature<Signature>::ret,
+      typename detail::FnToolBox::FnTraits::unwrap_signature<Signature>::args,
+      detail::FnToolBox::FnTraits::unwrap_signature<Signature>::arg_num,
+      BufSize, OtherRet, detail::FnToolBox::FnTraits::args_package<OtherArgs...>,
       sizeof... (OtherArgs), BufSize
     >::value,
     function<Signature, BufSize>
@@ -1756,15 +1758,15 @@ namespace detail {
 namespace detail {
 
   template <typename Functor>
-  struct __function_deduce_guide_helper
+  struct function_deduce_guide_helper
   {
     using type = decltype(make_function(std::declval<Functor>()));
   };
 
-  template <typename T> struct __function_deduce_get_signature;
+  template <typename T> struct function_deduce_get_signature;
 
   template <typename Sig, std::size_t Buf>
-  struct __function_deduce_get_signature<Fn<Sig, Buf>>
+  struct function_deduce_get_signature<Fn<Sig, Buf>>
   {
     using signature = Sig;
     static constexpr std::size_t bufsize = Buf;
@@ -1773,9 +1775,9 @@ namespace detail {
 } // end namespace embed::detail
 
   template <typename Functor,
-    typename DeduceRet = typename detail::__function_deduce_guide_helper<Functor>::type,
-    typename Signature = typename detail::__function_deduce_get_signature<DeduceRet>::signature,
-    std::size_t BufferSize = detail::__function_deduce_get_signature<DeduceRet>::bufsize>
+    typename DeduceRet = typename detail::function_deduce_guide_helper<Functor>::type,
+    typename Signature = typename detail::function_deduce_get_signature<DeduceRet>::signature,
+    std::size_t BufferSize = detail::function_deduce_get_signature<DeduceRet>::bufsize>
   Fn(Functor) -> Fn<Signature, BufferSize>;
 
 #endif
