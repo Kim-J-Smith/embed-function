@@ -17,6 +17,7 @@ add_executable(
     ${PROJECT_NAME}
     ${CMAKE_SOURCE_DIR}/test-001.cpp
     ${CMAKE_SOURCE_DIR}/test-002.cpp
+    ${CMAKE_SOURCE_DIR}/test-003.cpp
     ${CMAKE_SOURCE_DIR}/main.cpp
 )
 set_target_properties(
@@ -58,5 +59,7 @@ else()
     -Wall
     -Wextra
     -Wpedantic
+    -pedantic
+    -O2
   )
 endif()

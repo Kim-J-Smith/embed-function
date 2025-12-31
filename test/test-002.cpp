@@ -1,11 +1,7 @@
 // Test moving / copying / invoking embed::function
 #include <iostream>
 #include <functional>
-#include "embed_function.hpp"
-
-#define GREEN "\033[32m"
-
-#define RESET "\033[0m"
+#include "embed/embed_function.hpp"
 
 struct t2_001_multi_args_float_return
 {
@@ -76,6 +72,7 @@ void test_002()
 
     auto fn10 = make_function(fn9); // ADL
 
+#if !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
     auto fn11 = embed::make_function(t2_002_non_copyable_struct{});
 
     auto fn12 = std::move(fn11);
@@ -87,6 +84,7 @@ void test_002()
     embed::function<void(int)> fn13;
 
     fn13 = std::move(fn12);
+#endif
 
     std::cout << "\n<test_002>: [BEGIN] Copy and move between embed::Fn" << std::endl;
 
@@ -103,7 +101,7 @@ void test_002()
         std::cerr << e.what() << std::endl;
     }
 # if defined(EMBED_NO_STD_HEADER)
-    catch(const embed::_fn_no_std::exception& e) {
+    catch(const embed::detail::fn_no_std::exception& e) {
         std::cerr << e.what() << std::endl;
     }
 # endif
@@ -113,11 +111,13 @@ void test_002()
     fn8(0, 0, 8);
     fn9(0, 0, 9);
     fn10(0, 0, 10);
+#if !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
     fn11(11);
     fn13(13);
+#endif
 
     std::cout << "<test_002>: [END] Copy and move between embed::Fn\n" << std::endl;
 
-    std::cout << "[END - test_002] : " GREEN "OK" RESET "\n\n" << std::endl;
+    std::cout << "[END - test_002] : ------ "  "OK"  " ------\n\n" << std::endl;
 }
 
