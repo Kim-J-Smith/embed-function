@@ -315,6 +315,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   template <typename Signature, std::size_t BufSize>
   class Fn;
 
+namespace detail {
+
   /**
    *  @brief Exception class thrown when class template function's
    *  operator() is called with an empty target.
@@ -1085,6 +1087,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return invoker;
     }
   };
+
+} // end namespace embed::detail
 
   /**
    * @brief   A light polymorphic wrapper for callable object.
