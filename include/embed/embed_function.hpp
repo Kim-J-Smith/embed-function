@@ -110,7 +110,9 @@ SOFTWARE.
 
 /// @note User can customize following configs
 
-// need fast call or not (fast call consume more RAM)
+// Need fast call or not (fast call consume more RAM).
+// The rate of function calls is improved by about 65% when fast-call is enabled.
+// With fast-call enabled, each instance of embed::function uses an extra pointer-sized RAM.
 #define EMBED_FN_NEED_FAST_CALL     false
 
 // assert nothrow callable function
