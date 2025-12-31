@@ -325,8 +325,8 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     bad_function_call()                                     = default;
     bad_function_call(const bad_function_call&)             = default;
     bad_function_call& operator=(const bad_function_call&)  = default;
+    ~bad_function_call() override                           = default;
 
-    virtual ~bad_function_call() noexcept override {};
     const char* what() const noexcept override
     {
       return "embed::Fn::operator() is called with an empty target";
