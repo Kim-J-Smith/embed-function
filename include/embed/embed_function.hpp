@@ -351,7 +351,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   {
     void*       vPtr;
     const void* cvPtr;
-    void (* fPtr) (void);
+    void (* fPtr) ();
 
     char        buf[BufSize];
   };
@@ -1182,7 +1182,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     }
 
     // Create an empty function wrapper.
-    EMBED_INLINE Fn() noexcept {}
+    EMBED_INLINE Fn() noexcept = default;
 
     // Create an empty function wrapper.
     EMBED_INLINE Fn(std::nullptr_t) noexcept {}
@@ -1263,7 +1263,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         "embed::Fn require the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
-        "membed::Fn target must be copy-constructible");
+        "embed::Fn target must be copy-constructible");
 
       static_assert(std::is_nothrow_constructible<DecayFunctor, Functor>::value,
         "embed::Fn target must be NO-THROW constructible from the "
@@ -1305,7 +1305,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     }
 # endif // !defined(EMBED_NOSTDHEADER_NO_NONCOPYABLE)
 
-    // Swap Fn but unkown the real type of `Functor`.
+    // Swap Fn but unknown the real type of `Functor`.
     // But only M_manager remember the `Functor`.
     void swap(Fn& fn) noexcept
     {
@@ -1411,7 +1411,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
         "embed::Fn require the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
-        "membed::Fn target must be copy-constructible");
+        "embed::Fn target must be copy-constructible");
 
       static_assert(std::is_nothrow_constructible<DecayFunctor, Functor>::value,
         "embed::Fn target must be NO-THROW constructible from the "
@@ -1451,7 +1451,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     }
 # endif // !defined(EMBED_NOSTDHEADER_NO_NONCOPYABLE)
 
-    // Swap Fn but unkown the real type of `Functor`.
+    // Swap Fn but unknown the real type of `Functor`.
     // But only M_manager remember the `Functor`.
     void swap(Fn& fn) noexcept
     {
@@ -1504,7 +1504,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 #endif // End EMBED_FN_NEED_FAST_CALL == true or not
 
-    /// @attention operator= may cunsume more resource,
+    /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(const Fn& fn) noexcept
     {
@@ -1512,7 +1512,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @attention operator= may cunsume more resource,
+    /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(Fn&& fn) noexcept
     {
@@ -1521,7 +1521,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @attention operator= may cunsume more resource,
+    /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     template <typename RetT, std::size_t OtherBufSize, typename... ArgsT>
     EMBED_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
@@ -1538,7 +1538,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       return *this;
     }
 
-    /// @attention operator= may cunsume more resource,
+    /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     template <typename Functor,
       typename DecayFunc = Fn::DecayFunc_t<Functor> >
