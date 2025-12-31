@@ -404,7 +404,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     /// @c FnInvoker is aimed to help Fn call the functor.
     /// When @b EMBED_FN_NEED_FAST_CALL is false, FnManager
     /// will help Fn call the functor instead of FnInvoker,
-    /// which will save the RAM, but is more slower than FnInvoker.
+    /// which will save the RAM, but is slower than FnInvoker.
     template <typename Signature, typename Functor, std::size_t BufSize>
     struct FnInvoker;
 
@@ -444,7 +444,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     template <typename To, typename From>
     struct reference_converts_from_temporary
     {
-      using ncvref_To = typename std::remove_cv<
+      using no_cvref_To = typename std::remove_cv<
         typename std::remove_reference<To>::type
       >::type;
 
@@ -452,12 +452,12 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       static constexpr bool pr_to_l = std::is_lvalue_reference<To>::value
         && !std::is_reference<From>::value
         && std::is_const<typename std::remove_reference<To>::type>::value
-        && std::is_convertible<From, ncvref_To>::value;
+        && std::is_convertible<From, no_cvref_To>::value;
 
       // prvalue is being bound to [const] xvalue(right reference)
       static constexpr bool pr_to_x = std::is_rvalue_reference<To>::value
         && !std::is_reference<From>::value
-        && std::is_convertible<From, ncvref_To>::value;
+        && std::is_convertible<From, no_cvref_To>::value;
 
       static constexpr bool value = pr_to_l || pr_to_x;
     };
@@ -617,7 +617,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
     };
 
     template <typename ArgsPackageFrom, typename ArgsPackageTo>
-    struct arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, (std::size_t)-1>
+    struct arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, static_cast<std::size_t>(-1)>
     { static constexpr bool value = false; };
 
     /// @e arguments_are_same
