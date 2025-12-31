@@ -52,7 +52,7 @@
 # endif
 #endif
 
-namespace embed { namespace _fn_no_std {
+namespace embed { namespace detail { namespace fn_no_std {
 
   // std::size_t
   using size_t = decltype(sizeof(int));
@@ -295,7 +295,7 @@ namespace embed { namespace _fn_no_std {
   template <class _Tp>
   struct is_copy_constructible
   : public true_type {};
-# define EMBED_NOSTDHEADER_NO_NONCOPYABLE
+# define EMBED_NO_NONCOPYABLE_FUNCTOR
 #endif
 
   // std::is_nothrow_copy_constructible
@@ -570,17 +570,13 @@ namespace embed { namespace _fn_no_std {
     __y = move(__t);
   }
 
-} } // end namespace embed::_no_std
+} } } // end namespace embed::detail::fn_no_std
 
-EMBED_NODISCARD EMBED_INLINE void*
-operator new(decltype(sizeof(int)), void* __p) noexcept {
-  return __p;
-}
+EMBED_NODISCARD void* 
+operator new(decltype(sizeof(int)), void* __p) noexcept;
 
-EMBED_NODISCARD EMBED_INLINE void*
-operator new[](decltype(sizeof(int)), void* __p) noexcept {
-  return __p;
-}
+EMBED_NODISCARD void* 
+operator new[](decltype(sizeof(int)), void* __p) noexcept;
 
 #endif // EMBED_FUNCTION_NOSTD_HPP__
 
