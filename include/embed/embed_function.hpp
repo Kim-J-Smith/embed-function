@@ -1011,8 +1011,16 @@ namespace detail {
     }
 
   public:
-    /// @e M_get_pointer
-    // break the `const` promises.
+    /**
+     * @e M_get_pointer
+     * @attention break the `const` promises.
+     * @note SAFE: Underneath the `src` variable is `M_functor`, which is non-const,
+     * and it's safe to use const_cast here. The non-const pointer obtained here
+     * is not used to explicitly modify the object, except for side effects and
+     * move operations when the callable object is invoked. The former provides
+     * the same safety as `std::function`, and the move operation strictly checks
+     * that the underlying object is nonconst to ensure safety.
+     */
     static Functor*
     M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
