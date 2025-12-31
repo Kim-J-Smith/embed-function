@@ -1753,6 +1753,7 @@ namespace detail {
 #if ( __cpp_deduction_guides >= 201606 ) || ( EMBED_CXX_VERSION >= 201703L )
 
   // Deduce the template type.
+namespace detail {
 
   template <typename Functor>
   struct __function_deduce_guide_helper
@@ -1769,10 +1770,12 @@ namespace detail {
     static constexpr std::size_t bufsize = Buf;
   };
 
+} // end namespace embed::detail
+
   template <typename Functor,
-    typename DeduceRet = typename __function_deduce_guide_helper<Functor>::type,
-    typename Signature = typename __function_deduce_get_signature<DeduceRet>::signature,
-    std::size_t BufferSize = __function_deduce_get_signature<DeduceRet>::bufsize>
+    typename DeduceRet = typename detail::__function_deduce_guide_helper<Functor>::type,
+    typename Signature = typename detail::__function_deduce_get_signature<DeduceRet>::signature,
+    std::size_t BufferSize = detail::__function_deduce_get_signature<DeduceRet>::bufsize>
   Fn(Functor) -> Fn<Signature, BufferSize>;
 
 #endif
