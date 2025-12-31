@@ -164,12 +164,12 @@ SOFTWARE.
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  if defined(_MSC_VER)
 #   pragma message("[WARNING]: You are using c++ exception, which may consume more ROM.\
- Try not use `/EHs-c- /D _HAS_EXCEPTIONS=0 /wd4577` to disable the exception. Or if you exactly\
- want to enable the exception, then please use `/D EMBED_NO_WARNING=1` to ignore this warning.")
+ Try not use '/EHs-c- /D _HAS_EXCEPTIONS=0 /wd4577' to disable the exception. Or if you exactly\
+ want to enable the exception, then please use '/D EMBED_NO_WARNING=1' to ignore this warning.")
 #  else
 #   warning You are using c++ exception, which may consume more ROM.\
- Try use `-fno-exceptions` to disable the exception. Or if you exactly\
- want to enable the exception, then please use `-DEMBED_NO_WARNING=1` to ignore this warning.
+ Try use '-fno-exceptions' to disable the exception. Or if you exactly\
+ want to enable the exception, then please use '-DEMBED_NO_WARNING=1' to ignore this warning.
 #  endif
 # endif
 #endif
