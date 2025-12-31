@@ -277,17 +277,16 @@ SOFTWARE.
 #endif
 
 ////////////////////////////////////////////////////////////////
-namespace embed
-{
+namespace embed { namespace detail {
 
   /// @note User can customize following configs
 
   // the default buffer size for `embed::Fn`.
-  constexpr std::size_t _FnDefaultBufSize = (1 * sizeof(void*));
+  constexpr std::size_t FnDefaultBufSize = (1 * sizeof(void*));
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] static EMBED_INLINE EMBED_UNUSED void __bad_function_call_handler()
+  [[noreturn]] static EMBED_INLINE EMBED_UNUSED void bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -298,7 +297,7 @@ namespace embed
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] static EMBED_INLINE EMBED_UNUSED void __bad_function_copy_handler()
+  [[noreturn]] static EMBED_INLINE EMBED_UNUSED void bad_function_copy_handler()
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
@@ -307,7 +306,7 @@ namespace embed
     std::terminate(); // Terminate the program
   }
 
-}
+} } // end namespace embed::detail
 ////////////////////////////////////////////////////////////////
 
 namespace embed EMBED_ABI_VISIBILITY(default)
@@ -341,7 +340,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
 #else
-    __bad_function_call_handler();
+    detail::bad_function_call_handler();
 #endif
   }
 
@@ -1065,7 +1064,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
       {
       case OP_clone_functor:
         /// @attention non-copyable object CANNOT clone!
-        __bad_function_copy_handler();
+        detail::bad_function_copy_handler();
         break;
 
       case OP_move_functor:
@@ -1594,7 +1593,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
    * @note It is encouraged to use `embed::function` instead of `embed::Fn`.
    * `embed::function` will automatically align the BufSize.
    */
-  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
+  template <typename Signature, std::size_t BufSize = detail::FnDefaultBufSize>
   using function = Fn<Signature, _FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
 
   /**
@@ -1617,13 +1616,13 @@ namespace embed EMBED_ABI_VISIBILITY(default)
   }
 
   // Overload for empty.
-  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
+  template <typename Signature, std::size_t BufSize = detail::FnDefaultBufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function() noexcept
   { return function<Signature, BufSize>(); }
 
   // Overload for nullptr.
-  template <typename Signature, std::size_t BufSize = _FnDefaultBufSize>
+  template <typename Signature, std::size_t BufSize = detail::FnDefaultBufSize>
   EMBED_NODISCARD inline function<Signature, BufSize>
   make_function(std::nullptr_t) noexcept
   { return function<Signature>(nullptr); }
