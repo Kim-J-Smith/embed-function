@@ -342,7 +342,7 @@ namespace detail {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
 #else
-    detail::bad_function_call_handler();
+    bad_function_call_handler();
 #endif
   }
 
@@ -1066,7 +1066,7 @@ namespace detail {
       {
       case OP_clone_functor:
         /// @attention non-copyable object CANNOT clone!
-        detail::bad_function_copy_handler();
+        bad_function_copy_handler();
         break;
 
       case OP_move_functor:
@@ -1095,7 +1095,7 @@ namespace detail {
    * @note    Only use stack memory. NO HEAP MEMORY!
    */
   template <typename RetType, std::size_t BufSize, typename... ArgsType>
-  class Fn<RetType(ArgsType...), BufSize> : private _FnToolBox
+  class Fn<RetType(ArgsType...), BufSize> : private detail::_FnToolBox
   {
   private:
     template <typename Functor>
@@ -1122,26 +1122,26 @@ namespace detail {
     template <typename Functor>
     using Callable = FnTraits::Callable<RetType, Functor, ArgsType...>;
 
-    using Invoker_Type = RetType (*) (const _FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const detail::_FnFunctor<BufSize>&, ArgsType&&...);
 
     using Manager_Type = 
-      Invoker_Type (*) (_FnFunctor<BufSize>&, const _FnFunctor<BufSize>&, manOpcode) EMBED_CXX17_NOEXCEPT;
+      Invoker_Type (*) (detail::_FnFunctor<BufSize>&, const detail::_FnFunctor<BufSize>&, manOpcode) EMBED_CXX17_NOEXCEPT;
 
   private:
 
     // The `M_functor` store the callable object.
-    _FnFunctor<BufSize>   M_functor{};
+    detail::_FnFunctor<BufSize>   M_functor{};
 
     // The `M_manager` describes how to move / copy / destroy the `M_functor`,
     // and even describes how to invoke `M_functor` when not using `M_invoker`.
-    Manager_Type          M_manager{};
+    Manager_Type                  M_manager{};
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
 
     // invoker for the functor (func pointer)
     /// IF @b EMBED_FN_NEED_FAST_CALL is not true, `M_manager` 
     /// will help Fn invoke functor instead of `M_invoker`.
-    Invoker_Type          M_invoker{};
+    Invoker_Type                  M_invoker{};
 
 #endif
 
@@ -1238,7 +1238,7 @@ namespace detail {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
-          *reinterpret_cast<_FnFunctor<OtherSize>*>(&M_functor),
+          *reinterpret_cast<detail::_FnFunctor<OtherSize>*>(&M_functor),
           fn.M_functor, OP_clone_functor
         );
         M_manager = reinterpret_cast<Manager_Type>(fn.M_manager);
@@ -1313,7 +1313,7 @@ namespace detail {
     // But only M_manager remember the `Functor`.
     void swap(Fn& fn) noexcept
     {
-      _FnFunctor<BufSize> tmpFunc{};
+      detail::_FnFunctor<BufSize> tmpFunc{};
       if (M_manager)
       {
         M_manager(tmpFunc, M_functor, OP_move_functor);
@@ -1341,7 +1341,7 @@ namespace detail {
       if EMBED_EXPECT(M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
-        _throw_bad_function_call(); /* may throw exception */
+        detail::_throw_bad_function_call(); /* may throw exception */
     }
 #else
 
@@ -1387,7 +1387,7 @@ namespace detail {
       if (static_cast<bool>(fn))
       {
         fn.M_manager(
-          *reinterpret_cast<_FnFunctor<OtherSize>*>(&M_functor),
+          *reinterpret_cast<detail::_FnFunctor<OtherSize>*>(&M_functor),
           fn.M_functor, OP_clone_functor
         );
         M_manager = reinterpret_cast<Manager_Type>(fn.M_manager);
@@ -1459,7 +1459,7 @@ namespace detail {
     // But only M_manager remember the `Functor`.
     void swap(Fn& fn) noexcept
     {
-      _FnFunctor<BufSize> tmpFunc{};
+      detail::_FnFunctor<BufSize> tmpFunc{};
       if (M_manager)
       {
         M_manager(tmpFunc, M_functor, OP_move_functor);
@@ -1492,12 +1492,12 @@ namespace detail {
     EMBED_FN_CASE_NOEXCEPT
     {
       if EMBED_EXPECT(M_manager) {
-        _FnFunctor<BufSize> nil;
+        detail::_FnFunctor<BufSize> nil;
         Invoker_Type invoker = M_manager(nil, nil, OP_get_invoker);
         return invoker(M_functor, std::forward<ArgsType>(args)...);
       }
       else
-        _throw_bad_function_call(); /* may throw exception */
+        detail::_throw_bad_function_call(); /* may throw exception */
     }
 
 # if defined(__clang__)
@@ -1598,7 +1598,7 @@ namespace detail {
    * `embed::function` will automatically align the BufSize.
    */
   template <typename Signature, std::size_t BufSize = detail::FnDefaultBufSize>
-  using function = Fn<Signature, _FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
+  using function = Fn<Signature, detail::_FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
 
   /**
    * @brief Make a function and automatically calculate the required size.
@@ -1606,7 +1606,7 @@ namespace detail {
    */
   template <typename Signature, typename Functor>
   EMBED_NODISCARD inline typename std::enable_if<
-    !_FnToolBox::FnTraits::is_Fn_and_similar<
+    !detail::_FnToolBox::FnTraits::is_Fn_and_similar<
       Signature,
       typename std::remove_const<
         typename std::remove_reference<Functor>::type
@@ -1654,10 +1654,10 @@ namespace detail {
       typename std::remove_reference<Lambda>::type
     >::type,
     typename Signature = typename 
-    _FnToolBox::FnTraits::get_unique_call_signature<ClassType>::type
+    detail::_FnToolBox::FnTraits::get_unique_call_signature<ClassType>::type
   >
   EMBED_NODISCARD inline typename std::enable_if<
-    _FnToolBox::FnTraits::is_unique_callable<ClassType>::value,
+    detail::_FnToolBox::FnTraits::is_unique_callable<ClassType>::value,
     function<Signature, sizeof(Lambda)>
   >::type
   make_function(Lambda&& la) noexcept
@@ -1684,11 +1684,11 @@ namespace detail {
   // Overload for `embed::Fn<Other, Size>`.
   template <typename Signature, typename OtherRet, std::size_t BufSize, typename... OtherArgs>
   EMBED_NODISCARD inline typename std::enable_if<
-    _FnToolBox::FnTraits::is_similar_Fn<
-      typename _FnToolBox::FnTraits::unwrap_signature<Signature>::ret,
-      typename _FnToolBox::FnTraits::unwrap_signature<Signature>::args,
-      _FnToolBox::FnTraits::unwrap_signature<Signature>::arg_num,
-      BufSize, OtherRet, _FnToolBox::FnTraits::args_package<OtherArgs...>,
+    detail::_FnToolBox::FnTraits::is_similar_Fn<
+      typename detail::_FnToolBox::FnTraits::unwrap_signature<Signature>::ret,
+      typename detail::_FnToolBox::FnTraits::unwrap_signature<Signature>::args,
+      detail::_FnToolBox::FnTraits::unwrap_signature<Signature>::arg_num,
+      BufSize, OtherRet, detail::_FnToolBox::FnTraits::args_package<OtherArgs...>,
       sizeof... (OtherArgs), BufSize
     >::value,
     function<Signature, BufSize>
