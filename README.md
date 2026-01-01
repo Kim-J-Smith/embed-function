@@ -1,6 +1,6 @@
 # embed-function
 
-![Version - 1.0.6](https://img.shields.io/badge/Version-1.0.6-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
+![Version - 1.0.7](https://img.shields.io/badge/Version-1.0.7-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
 
 ![gcc-c++11/14/17/20/23 - passing](https://img.shields.io/badge/GCC_C++11/14/17/20/23-passing-3215911?style=flat) ![clang-c++11/14/17/20/23 - passing](https://img.shields.io/badge/Clang_C++11/14/17/20/23-passing-3215911?style=flat) ![msvc-c++14/17/20/23 - passing](https://img.shields.io/badge/MSVC_C++14/17/20/23-passing-3215911?style=flat)
 
@@ -63,6 +63,33 @@ int main()
 {
     Test t{"hello world"};
     embed::function<void(), sizeof(std::string)> fn = t;
+    fn();
+    return 0;
+}
+
+```
+
+- large callable object
+
+```cpp
+#include "embed_function.hpp"
+#include <iostream>
+#include <string>
+
+struct Test
+{
+    char m[1024];
+    std::string str;
+    void operator()() const
+    {
+        std::cout << this->str << std::endl;
+    }
+};
+
+int main()
+{
+    Test t{"hello world"};
+    embed::function<void(), sizeof(Test)> fn = t;
     fn();
     return 0;
 }
