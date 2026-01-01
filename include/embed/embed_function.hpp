@@ -248,7 +248,7 @@ SOFTWARE.
 # endif
 #endif
 
-/// @c EMBED_EXPECT @c EMBED_NOT_EXPECT
+/// @c EMBED_EXPECT(condition) @c EMBED_NOT_EXPECT(condition)
 #ifndef EMBED_EXPECT
 # if EMBED_CXX_VERSION >= 202002L
 #  define EMBED_EXPECT(condition) (condition) [[likely]]
@@ -259,6 +259,19 @@ SOFTWARE.
 # else
 #  define EMBED_EXPECT(condition) (condition)
 #  define EMBED_NOT_EXPECT(condition) (condition)
+# endif
+#endif
+
+/// @c EMBED_UNREACHABLE()
+#ifndef EMBED_UNREACHABLE
+# if defined(_MSV_CER)
+#  define EMBED_UNREACHABLE() __assume(false)
+# elif defined(__GNUC__) && (__GNUC__ >= 5)
+#  define EMBED_UNREACHABLE() __builtin_unreachable()
+# elif EMBED_HAS_BUILTIN(__builtin_unreachable)
+#  define EMBED_UNREACHABLE() __builtin_unreachable()
+# else
+#  define EMBED_UNREACHABLE() 
 # endif
 #endif
 
@@ -348,6 +361,8 @@ namespace detail {
 #else
     bad_function_call_handler();
 #endif
+
+    EMBED_UNREACHABLE(); // Unreachable
   }
 
   /// @c FnBufType
@@ -929,6 +944,8 @@ namespace detail {
         invoker = &M_invoke;
         break;
 #endif
+
+      default: EMBED_UNREACHABLE(); /* Unreachable */ break;
       } // end switch
 
       return invoker;
@@ -1087,6 +1104,7 @@ namespace detail {
       case OP_clone_functor:
         /// @attention non-copyable object CANNOT clone!
         bad_function_copy_handler();
+        EMBED_UNREACHABLE(); // Unreachable
         break;
 
       case OP_move_functor:
@@ -1102,6 +1120,8 @@ namespace detail {
         invoker = &M_invoke;
         break;
 #endif
+
+      default: EMBED_UNREACHABLE(); /* Unreachable */ break;
       } // end switch
 
       return invoker;
