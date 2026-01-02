@@ -34,7 +34,7 @@ SOFTWARE.
  * 
  * @author      Kim-J-Smith
  * 
- * Wrapper for any callable object, including functor, normal function, lambda, etc.
+ * Wrapper for any callable object, including functor, free function, lambda, etc.
  * 
  * Design intent is to do what `std::function` do but without
  * allocation of heap memory, virtual function. Whats more, user
@@ -65,7 +65,7 @@ SOFTWARE.
  * 
  * EXAMPLE:
  *  
- *  embed::function<Signature> fn = normal_function;
+ *  embed::function<Signature> fn = free_function;
  * 
  *  embed::function<void()> fn = []() { printf("hello\n"); };
  * 
@@ -74,9 +74,9 @@ SOFTWARE.
  *  embed::function<Signature, sizeof(callable_class)> = callable_class{...};
  * 
  * 
- *  auto fn = embed::make_function<Signature>(normal_function);
+ *  auto fn = embed::make_function<Signature>(free_function);
  * 
- *  auto fn = embed::make_function(normal_function); // auto infer the Signature
+ *  auto fn = embed::make_function(free_function); // auto infer the Signature
  * 
  *  auto fn = embed::make_function<void(char)>([](int) { printf("hello\n"); });
  * 
@@ -89,7 +89,7 @@ SOFTWARE.
  *  auto fn = embed::make_function(&my_class::member_function); // auto infer the Signature
  * 
  * 
- *  embed::Fn fn = normal_function; // require C++17 template deduce guide
+ *  embed::Fn fn = free_function; // require C++17 template deduce guide
  * 
  *  embed::Fn fn = []() { printf("hello\n"); }; // require C++17 template deduce guide
  * 
@@ -1671,7 +1671,7 @@ namespace detail {
   make_function(std::nullptr_t) noexcept
   { return function<Signature>(nullptr); }
 
-  // Overload for normal function.
+  // Overload for free function.
   template <typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<RetType(ArgsType...)>
   make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
@@ -1679,7 +1679,7 @@ namespace detail {
     return function<RetType(ArgsType...)>(func);
   }
 
-  // Overload for normal function with specified signature.
+  // Overload for free function with specified signature.
   template <typename Signature, typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<Signature>
   make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
