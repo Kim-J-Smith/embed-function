@@ -454,7 +454,11 @@ namespace detail {
         ((BufSize - 1) / sizeof(void*) + 1) * sizeof(void*);
     };
 
-    template <typename T> using void_t = void;
+    // The behavior of `void_t` is incorrect in the outdated GCC compiler.
+    // So we use `make_void` to correct the behavior of `void_t`.
+    // See https://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#1558
+    template <typename T> struct make_void { using type = void; };
+    template <typename T> using void_t = typename make_void<T>::type;
 
     template <typename Func, typename... ArgsT>
     struct invoke_result
