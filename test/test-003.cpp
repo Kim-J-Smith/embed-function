@@ -1,8 +1,10 @@
 #include <iostream>
 #include <chrono>
+#include <functional>
 #include "embed/embed_function.hpp"
 
 #define TIME_(x) (std::chrono::duration_cast<std::chrono::nanoseconds>(x).count()) << " ns"
+#define TIME__(x) (std::chrono::duration_cast<std::chrono::nanoseconds>(x).count())
 
 void t3_normal_function(int a, float b) {
     volatile float i = (float)a + b;
@@ -55,16 +57,36 @@ void test_003()
 
     std::cout << "time_constructor_assign = " << TIME_(time_end_4-time_begin_4) << std::endl;
 
+    constexpr std::size_t N = 100000000;
+
     auto time_begin_5 = std::chrono::high_resolution_clock::now();
 
     embed::function<void(int, float)> fn4 = t3_normal_function;
-    for (int i = 0; i < 100000000; i++) {
-        fn4(i, (float)(i+1));
+    for (std::size_t i = 0; i < N; i++) {
+        fn4((int)i, (float)(i+1));
     }
 
     auto time_end_5 = std::chrono::high_resolution_clock::now();
 
     std::cout << "time_invoke = " << TIME_(time_end_5-time_begin_5) << std::endl;
+
+    auto time_begin_6 = std::chrono::high_resolution_clock::now();
+
+    std::function<void(int, float)> fn5 = t3_normal_function;
+    for (std::size_t i = 0; i < N; i++) {
+        fn5((int)i, (float)(i+1));
+    }
+
+    auto time_end_6 = std::chrono::high_resolution_clock::now();
+
+    std::cout << "time_std_invoke = " << TIME_(time_end_6-time_begin_6) << std::endl;
+
+    double t__06 = (double) TIME__(time_end_6-time_begin_6);
+    double t__05 = (double) TIME__(time_end_5-time_begin_5);
+
+    std::cout << "The calling speed of the embed::function in the current mode is "
+    << t__06 / t__05 * 100 << '%'
+    << " times that of std::function." << std::endl;
 
     std::cout << "[END - test_003] : ------ "  "OK"  " ------\n\n" << std::endl;
 }

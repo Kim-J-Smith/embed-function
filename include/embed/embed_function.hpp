@@ -28,13 +28,13 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.6
+ * @version     1.0.7
  * 
  * @date        2025-12-6
  * 
  * @author      Kim-J-Smith
  * 
- * Wrapper for any callable object, including functor, normal function, lambda, etc.
+ * Wrapper for any callable object, including functor, free function, lambda, etc.
  * 
  * Design intent is to do what `std::function` do but without
  * allocation of heap memory, virtual function. Whats more, user
@@ -65,7 +65,7 @@ SOFTWARE.
  * 
  * EXAMPLE:
  *  
- *  embed::function<Signature> fn = normal_function;
+ *  embed::function<Signature> fn = free_function;
  * 
  *  embed::function<void()> fn = []() { printf("hello\n"); };
  * 
@@ -74,9 +74,9 @@ SOFTWARE.
  *  embed::function<Signature, sizeof(callable_class)> = callable_class{...};
  * 
  * 
- *  auto fn = embed::make_function<Signature>(normal_function);
+ *  auto fn = embed::make_function<Signature>(free_function);
  * 
- *  auto fn = embed::make_function(normal_function); // auto infer the Signature
+ *  auto fn = embed::make_function(free_function); // auto infer the Signature
  * 
  *  auto fn = embed::make_function<void(char)>([](int) { printf("hello\n"); });
  * 
@@ -89,7 +89,7 @@ SOFTWARE.
  *  auto fn = embed::make_function(&my_class::member_function); // auto infer the Signature
  * 
  * 
- *  embed::Fn fn = normal_function; // require C++17 template deduce guide
+ *  embed::Fn fn = free_function; // require C++17 template deduce guide
  * 
  *  embed::Fn fn = []() { printf("hello\n"); }; // require C++17 template deduce guide
  * 
@@ -104,7 +104,7 @@ SOFTWARE.
 
 #if defined(_MSC_VER)
 # pragma warning(push)
-# pragma warning(disable: 4514 4668 4577 4005 4180)
+# pragma warning(disable: 4514 4668 4005 4710)
 #endif
 ////////////////////////////////////////////////////////////////
 
@@ -176,7 +176,7 @@ SOFTWARE.
 # endif
 #endif
 
-/// @c EMBED_ABI_VISIBILITY
+/// @c EMBED_ABI_VISIBILITY(x)
 #ifndef EMBED_ABI_VISIBILITY
 # if defined(__GNUC__) || defined(__clang__)
 #  define EMBED_ABI_VISIBILITY(x) __attribute__((visibility(#x)))
@@ -248,17 +248,30 @@ SOFTWARE.
 # endif
 #endif
 
-/// @c EMBED_EXPECT @c EMBED_NOT_EXPECT
-#ifndef EMBED_EXPECT
+/// @c EMBED_LIKELY(condition) @c EMBED_UNLIKELY(condition)
+#ifndef EMBED_LIKELY
 # if EMBED_CXX_VERSION >= 202002L
-#  define EMBED_EXPECT(condition) (condition) [[likely]]
-#  define EMBED_NOT_EXPECT(condition) (condition) [[unlikely]]
+#  define EMBED_LIKELY(condition) (condition) [[likely]]
+#  define EMBED_UNLIKELY(condition) (condition) [[unlikely]]
 # elif defined(__GNUC__) || defined(__clang__)
-#  define EMBED_EXPECT(condition) (__builtin_expect(static_cast<bool>(condition), 1))
-#  define EMBED_NOT_EXPECT(condition) (__builtin_expect(static_cast<bool>(condition), 0))
+#  define EMBED_LIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 1))
+#  define EMBED_UNLIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 0))
 # else
-#  define EMBED_EXPECT(condition) (condition)
-#  define EMBED_NOT_EXPECT(condition) (condition)
+#  define EMBED_LIKELY(condition) (condition)
+#  define EMBED_UNLIKELY(condition) (condition)
+# endif
+#endif
+
+/// @c EMBED_UNREACHABLE()
+#ifndef EMBED_UNREACHABLE
+# if defined(_MSV_CER)
+#  define EMBED_UNREACHABLE() __assume(false)
+# elif defined(__GNUC__) && (__GNUC__ >= 5)
+#  define EMBED_UNREACHABLE() __builtin_unreachable()
+# elif EMBED_HAS_BUILTIN(__builtin_unreachable)
+#  define EMBED_UNREACHABLE() __builtin_unreachable()
+# else
+#  define EMBED_UNREACHABLE() 
 # endif
 #endif
 
@@ -339,15 +352,17 @@ namespace detail {
     };
   };
 
-  /// @c throw_bad_function_call
+  /// @c throw_bad_function_call_or_abort
   // For private use only.
-  [[noreturn]] static inline void throw_bad_function_call()
+  [[noreturn]] EMBED_INLINE static void throw_bad_function_call_or_abort()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
 #else
     bad_function_call_handler();
 #endif
+
+    EMBED_UNREACHABLE(); // Unreachable
   }
 
   /// @c FnBufType
@@ -366,13 +381,16 @@ namespace detail {
   template <std::size_t BufSize>
   union EMBED_ALIAS FnFunctor
   {
-    void* M_access() noexcept { return &M_pod_data[0]; }
-    const void* M_access() const noexcept { return &M_pod_data[0]; }
+    EMBED_INLINE void* M_access() noexcept { return &M_pod_data[0]; }
+
+    EMBED_INLINE const void* M_access() const noexcept { return &M_pod_data[0]; }
 
     template <typename T>
-    T& M_access() noexcept { return *static_cast<T*>(M_access()); }
+    EMBED_INLINE T& M_access() noexcept
+    { return *static_cast<T*>(M_access()); }
+
     template <typename T>
-    const T& M_access() const noexcept
+    EMBED_INLINE const T& M_access() const noexcept
     { return *static_cast<const T*>(M_access()); }
 
     FnBufType<BufSize>   M_unused;
@@ -439,7 +457,11 @@ namespace detail {
         ((BufSize - 1) / sizeof(void*) + 1) * sizeof(void*);
     };
 
-    template <typename T> using void_t = void;
+    // The behavior of `void_t` is incorrect in the outdated GCC compiler.
+    // So we use `make_void` to correct the behavior of `void_t`.
+    // See https://www.open-std.org/jtc1/sc22/wg21/docs/cwg_defects.html#1558
+    template <typename T> struct make_void { using type = void; };
+    template <typename T> using void_t = typename make_void<T>::type;
 
     template <typename Func, typename... ArgsT>
     struct invoke_result
@@ -638,6 +660,7 @@ namespace detail {
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<!std::is_void<RetType>::value, RetType>::type
     invoke_r(Callee&& fn, ArgsType&&... args)
+      noexcept(noexcept(static_cast<Callee&&>(fn)(static_cast<ArgsType&&>(args)...)))
     {
       // The return type is not `void`.
       return std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
@@ -647,6 +670,7 @@ namespace detail {
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<std::is_void<RetType>::value>::type
     invoke_r(Callee&& fn, ArgsType&&... args)
+      noexcept(noexcept(static_cast<Callee&&>(fn)(static_cast<ArgsType&&>(args)...)))
     {
       // The return type is `void`.
       std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
@@ -846,8 +870,16 @@ namespace detail {
     }
 
   public:
-    /// @e M_get_pointer
-    // break the `const` promises.
+    /**
+     * @e M_get_pointer
+     * @attention break the `const` promises.
+     * @note SAFE: Underneath the `src` variable is `M_functor`, which is non-const,
+     * and it's safe to use const_cast here. The non-const pointer obtained here
+     * is not used to explicitly modify the object, except for side effects and
+     * move operations when the callable object is invoked. The former provides
+     * the same safety as `std::function`, and the move operation strictly checks
+     * that the underlying object is non-const to ensure safety.
+     */
     static Functor*
     M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
@@ -921,6 +953,8 @@ namespace detail {
         invoker = &M_invoke;
         break;
 #endif
+
+      default: EMBED_UNREACHABLE(); /* Unreachable */ break;
       } // end switch
 
       return invoker;
@@ -938,7 +972,7 @@ namespace detail {
   struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor, BufSize>
   {
   private:
-    static Functor*
+    static EMBED_INLINE Functor*
     M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
       const Functor& fn = src.template M_access<Functor>();
@@ -1011,8 +1045,16 @@ namespace detail {
     }
 
   public:
-    /// @e M_get_pointer
-    // break the `const` promises.
+    /**
+     * @e M_get_pointer
+     * @attention break the `const` promises.
+     * @note SAFE: Underneath the `src` variable is `M_functor`, which is non-const,
+     * and it's safe to use const_cast here. The non-const pointer obtained here
+     * is not used to explicitly modify the object, except for side effects and
+     * move operations when the callable object is invoked. The former provides
+     * the same safety as `std::function`, and the move operation strictly checks
+     * that the underlying object is non-const to ensure safety.
+     */
     static Functor*
     M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
@@ -1071,6 +1113,7 @@ namespace detail {
       case OP_clone_functor:
         /// @attention non-copyable object CANNOT clone!
         bad_function_copy_handler();
+        EMBED_UNREACHABLE(); // Unreachable
         break;
 
       case OP_move_functor:
@@ -1086,6 +1129,8 @@ namespace detail {
         invoker = &M_invoke;
         break;
 #endif
+
+      default: EMBED_UNREACHABLE(); /* Unreachable */ break;
       } // end switch
 
       return invoker;
@@ -1339,13 +1384,13 @@ namespace detail {
 
     /// @brief Call the functor with type `ArgsType...` arguments.
     /// @attention This contravenes [res.on.data.races]/p3. (same as `std::function`)
-    RetType operator() (ArgsType... args) const
+    EMBED_INLINE RetType operator() (ArgsType... args) const
     EMBED_FN_CASE_NOEXCEPT
     {
-      if EMBED_EXPECT(M_invoker)
+      if EMBED_LIKELY(M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
-        detail::throw_bad_function_call(); /* may throw exception */
+        detail::throw_bad_function_call_or_abort(); /* may not throw exception */
     }
 #else
 
@@ -1492,16 +1537,16 @@ namespace detail {
 
     /// @brief Call the functor with type `ArgsType...` arguments.
     /// @attention This contravenes [res.on.data.races]/p3. (same as `std::function`)
-    RetType operator() (ArgsType... args) const
+    EMBED_INLINE RetType operator() (ArgsType... args) const
     EMBED_FN_CASE_NOEXCEPT
     {
-      if EMBED_EXPECT(M_manager) {
+      if EMBED_LIKELY(M_manager) {
         detail::FnFunctor<BufSize> nil;
         Invoker_Type invoker = M_manager(nil, nil, OP_get_invoker);
         return invoker(M_functor, std::forward<ArgsType>(args)...);
       }
       else
-        detail::throw_bad_function_call(); /* may throw exception */
+        detail::throw_bad_function_call_or_abort(); /* may not throw exception */
     }
 
 # if defined(__clang__)
@@ -1635,7 +1680,7 @@ namespace detail {
   make_function(std::nullptr_t) noexcept
   { return function<Signature>(nullptr); }
 
-  // Overload for normal function.
+  // Overload for free function.
   template <typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<RetType(ArgsType...)>
   make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
@@ -1643,7 +1688,7 @@ namespace detail {
     return function<RetType(ArgsType...)>(func);
   }
 
-  // Overload for normal function with specified signature.
+  // Overload for free function with specified signature.
   template <typename Signature, typename RetType, typename... ArgsType>
   EMBED_NODISCARD inline function<Signature>
   make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept

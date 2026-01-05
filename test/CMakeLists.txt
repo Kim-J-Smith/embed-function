@@ -52,6 +52,7 @@ if(MSVC)
     /permissive-
     /W4
     /Wall
+    /wd4710
   )
 else()
   target_compile_options(
