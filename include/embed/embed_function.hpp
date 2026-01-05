@@ -176,7 +176,7 @@ SOFTWARE.
 # endif
 #endif
 
-/// @c EMBED_ABI_VISIBILITY
+/// @c EMBED_ABI_VISIBILITY(x)
 #ifndef EMBED_ABI_VISIBILITY
 # if defined(__GNUC__) || defined(__clang__)
 #  define EMBED_ABI_VISIBILITY(x) __attribute__((visibility(#x)))
@@ -248,17 +248,17 @@ SOFTWARE.
 # endif
 #endif
 
-/// @c EMBED_EXPECT(condition) @c EMBED_NOT_EXPECT(condition)
-#ifndef EMBED_EXPECT
+/// @c EMBED_LIKELY(condition) @c EMBED_UNLIKELY(condition)
+#ifndef EMBED_LIKELY
 # if EMBED_CXX_VERSION >= 202002L
-#  define EMBED_EXPECT(condition) (condition) [[likely]]
-#  define EMBED_NOT_EXPECT(condition) (condition) [[unlikely]]
+#  define EMBED_LIKELY(condition) (condition) [[likely]]
+#  define EMBED_UNLIKELY(condition) (condition) [[unlikely]]
 # elif defined(__GNUC__) || defined(__clang__)
-#  define EMBED_EXPECT(condition) (__builtin_expect(static_cast<bool>(condition), 1))
-#  define EMBED_NOT_EXPECT(condition) (__builtin_expect(static_cast<bool>(condition), 0))
+#  define EMBED_LIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 1))
+#  define EMBED_UNLIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 0))
 # else
-#  define EMBED_EXPECT(condition) (condition)
-#  define EMBED_NOT_EXPECT(condition) (condition)
+#  define EMBED_LIKELY(condition) (condition)
+#  define EMBED_UNLIKELY(condition) (condition)
 # endif
 #endif
 
@@ -354,7 +354,7 @@ namespace detail {
 
   /// @c throw_bad_function_call
   // For private use only.
-  [[noreturn]] static inline void throw_bad_function_call()
+  [[noreturn]] EMBED_INLINE static void throw_bad_function_call()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
@@ -657,6 +657,7 @@ namespace detail {
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<!std::is_void<RetType>::value, RetType>::type
     invoke_r(Callee&& fn, ArgsType&&... args)
+      noexcept(noexcept(static_cast<Callee&&>(fn)(static_cast<ArgsType&&>(args)...)))
     {
       // The return type is not `void`.
       return std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
@@ -666,6 +667,7 @@ namespace detail {
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<std::is_void<RetType>::value>::type
     invoke_r(Callee&& fn, ArgsType&&... args)
+      noexcept(noexcept(static_cast<Callee&&>(fn)(static_cast<ArgsType&&>(args)...)))
     {
       // The return type is `void`.
       std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
@@ -967,7 +969,7 @@ namespace detail {
   struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor, BufSize>
   {
   private:
-    static Functor*
+    static EMBED_INLINE Functor*
     M_get_pointer(const FnFunctor<BufSize>& src) noexcept
     {
       const Functor& fn = src.template M_access<Functor>();
@@ -1379,10 +1381,10 @@ namespace detail {
 
     /// @brief Call the functor with type `ArgsType...` arguments.
     /// @attention This contravenes [res.on.data.races]/p3. (same as `std::function`)
-    RetType operator() (ArgsType... args) const
+    EMBED_INLINE RetType operator() (ArgsType... args) const
     EMBED_FN_CASE_NOEXCEPT
     {
-      if EMBED_EXPECT(M_invoker)
+      if EMBED_LIKELY(M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
         detail::throw_bad_function_call(); /* may throw exception */
@@ -1532,10 +1534,10 @@ namespace detail {
 
     /// @brief Call the functor with type `ArgsType...` arguments.
     /// @attention This contravenes [res.on.data.races]/p3. (same as `std::function`)
-    RetType operator() (ArgsType... args) const
+    EMBED_INLINE RetType operator() (ArgsType... args) const
     EMBED_FN_CASE_NOEXCEPT
     {
-      if EMBED_EXPECT(M_manager) {
+      if EMBED_LIKELY(M_manager) {
         detail::FnFunctor<BufSize> nil;
         Invoker_Type invoker = M_manager(nil, nil, OP_get_invoker);
         return invoker(M_functor, std::forward<ArgsType>(args)...);
