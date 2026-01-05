@@ -104,7 +104,7 @@ SOFTWARE.
 
 #if defined(_MSC_VER)
 # pragma warning(push)
-# pragma warning(disable: 4514 4668 4577 4005 4180)
+# pragma warning(disable: 4514 4668 4005 4710)
 #endif
 ////////////////////////////////////////////////////////////////
 
@@ -381,13 +381,16 @@ namespace detail {
   template <std::size_t BufSize>
   union EMBED_ALIAS FnFunctor
   {
-    void* M_access() noexcept { return &M_pod_data[0]; }
-    const void* M_access() const noexcept { return &M_pod_data[0]; }
+    EMBED_INLINE void* M_access() noexcept { return &M_pod_data[0]; }
+
+    EMBED_INLINE const void* M_access() const noexcept { return &M_pod_data[0]; }
 
     template <typename T>
-    T& M_access() noexcept { return *static_cast<T*>(M_access()); }
+    EMBED_INLINE T& M_access() noexcept
+    { return *static_cast<T*>(M_access()); }
+
     template <typename T>
-    const T& M_access() const noexcept
+    EMBED_INLINE const T& M_access() const noexcept
     { return *static_cast<const T*>(M_access()); }
 
     FnBufType<BufSize>   M_unused;
