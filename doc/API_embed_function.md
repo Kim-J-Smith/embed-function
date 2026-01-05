@@ -16,6 +16,7 @@ The usage method of `embed::Fn` is very similar to that of `std::function`. The 
 ---
 
 ```cpp
+namespace embed {
     template <typename Signature, std::size_t BufSize>
     class Fn; // undefined
     template <typename RetType, std::size_t BufSize, typename... ArgsType>
@@ -23,6 +24,7 @@ The usage method of `embed::Fn` is very similar to that of `std::function`. The 
 
     template <typename Signature, std::size_t BufSize = detail::FnDefaultBufSize>
     using function = Fn<Signature, detail::FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
+} // end namespace embed
 ```
 
 | Type parameters | Description
@@ -48,12 +50,13 @@ The usage method of `embed::Fn` is very similar to that of `std::function`. The 
 
 | Member functions | Description
 | --- | ---
-| [(constructor)]() | constructs a new `embed::Fn` instance
-| [(destructor)]() | destroys a `embed::Fn` instance
-| [operator=]() | assigns a new target
-| [swap]() | swaps the contents
-| [operator bool]() | checks if a target is contained
-| [operator ()]() | invokes the target
+| [(constructor)](detail/constructor.md) | constructs a new `embed::Fn` instance
+| [(destructor)](detail/destructor.md) | destroys a `embed::Fn` instance
+| operator= | Assigns a new target to *embed::Fn*.
+| swap | void swap( Fn& other ) noexcept;<br>Exchanges the stored callable objects of *this and other.
+| is_empty | bool is_empty() const noexcept;<br>`true` if the instance is empty.
+| [operator bool](detail/operator%20bool.md) | checks if a target is contained
+| [operator ()](detail/operator().md) | invokes the target
 
 
 ### Non-member functions
@@ -63,4 +66,4 @@ The usage method of `embed::Fn` is very similar to that of `std::function`. The 
 | std::swap(`embed::Fn`) | specializes the std::swap algorithm
 | operator== | compares a std::function with nullptr
 | operator!= | compares a std::function with nullptr
-| make_function | Factory function, automatically deduces type signatures and the required buffer sizes and constructs an `embed::Fn` instance.
+| [make_function]() | Factory function, automatically deduces type signatures and the required buffer sizes and constructs an `embed::Fn` instance.

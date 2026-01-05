@@ -23,7 +23,7 @@
 
   By default, it occupies 2 pointer-sized amounts of RAM.
 
-  If you need to package larger objects that can be dynamically invoked, you can manually adjust the buffer size of the `embed::function<Signature, BufSize>`.
+  If you need to package larger callable objects, you can manually adjust the buffer size of the `embed::function<Signature, BufSize>`.
 
 - ✅ **Environmentally friendly for disabling exceptions**
 
@@ -37,7 +37,7 @@
 
 ## Quick start
 
-- clone the repo.
+- Clone the repo.
 - Add include path <repo_root>/include
 - In program `#include "embed/embed_function.hpp"`
 - Use the `embed::function` template class.
