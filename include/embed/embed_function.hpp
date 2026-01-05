@@ -352,9 +352,9 @@ namespace detail {
     };
   };
 
-  /// @c throw_bad_function_call
+  /// @c throw_bad_function_call_or_abort
   // For private use only.
-  [[noreturn]] EMBED_INLINE static void throw_bad_function_call()
+  [[noreturn]] EMBED_INLINE static void throw_bad_function_call_or_abort()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
@@ -1390,7 +1390,7 @@ namespace detail {
       if EMBED_LIKELY(M_invoker)
         return M_invoker(M_functor, std::forward<ArgsType>(args)...);
       else
-        detail::throw_bad_function_call(); /* may throw exception */
+        detail::throw_bad_function_call_or_abort(); /* may not throw exception */
     }
 #else
 
@@ -1546,7 +1546,7 @@ namespace detail {
         return invoker(M_functor, std::forward<ArgsType>(args)...);
       }
       else
-        detail::throw_bad_function_call(); /* may throw exception */
+        detail::throw_bad_function_call_or_abort(); /* may not throw exception */
     }
 
 # if defined(__clang__)
