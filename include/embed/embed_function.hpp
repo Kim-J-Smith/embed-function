@@ -303,7 +303,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] EMBED_UNUSED static EMBED_INLINE void bad_function_call_handler()
+  [[noreturn]] EMBED_UNUSED static inline void bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -314,7 +314,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] EMBED_UNUSED static EMBED_INLINE void bad_function_copy_handler()
+  [[noreturn]] EMBED_UNUSED static inline void bad_function_copy_handler()
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
@@ -354,7 +354,7 @@ namespace detail {
 
   /// @c throw_bad_function_call_or_abort
   // For private use only.
-  [[noreturn]] EMBED_INLINE static void throw_bad_function_call_or_abort()
+  [[noreturn]] static inline void throw_bad_function_call_or_abort()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
