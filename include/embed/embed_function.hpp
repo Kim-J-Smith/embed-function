@@ -380,13 +380,13 @@ namespace detail {
   /// @c EMBED_LAUNDER(x)
 # ifndef EMBED_LAUNDER
 #  if ( EMBED_CXX_VERSION >= 201703L ) && !defined(EMBED_NO_STD_HEADER)
-#   define EMBED_LAUNDER(x) std::launder(x)
+#   define EMBED_LAUNDER(x) ( ::std::launder(x) )
 #  elif EMBED_HAS_BUILTIN(__builtin_launder)
   template <typename T>
   EMBED_NODISCARD EMBED_INLINE constexpr T* launder(T* ptr) noexcept {
     return __builtin_launder(ptr);
   }
-#   define EMBED_LAUNDER(x) launder(x)
+#   define EMBED_LAUNDER(x) ( ::embed::detail::launder(x) )
 #  else
 #   define EMBED_LAUNDER(x) (x)
 #  endif
