@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.7
+ * @version     1.0.8
  * 
  * @date        2025-12-6
  * 
@@ -123,7 +123,7 @@ SOFTWARE.
 
 /// @c EMBED_CXX_VERSION
 #ifndef EMBED_CXX_VERSION
-# if defined(_MSC_VER)
+# if defined(_MSC_VER) && ( _MSC_VER >= 1900 )
 #  define EMBED_CXX_VERSION _MSVC_LANG
 # else
 #  define EMBED_CXX_VERSION __cplusplus
@@ -165,7 +165,7 @@ SOFTWARE.
 #if !EMBED_NO_WARNING
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  if defined(_MSC_VER)
-#   pragma message("[WARNING]: You are using c++ exception, which may consume more ROM.\
+#   pragma message(__FILE__ " [WARNING]: You are using c++ exception, which may consume more ROM.\
  Try not use '/EHs-c- /D _HAS_EXCEPTIONS=0 /wd4577' to disable the exception. Or if you exactly\
  want to enable the exception, then please use '/D EMBED_NO_WARNING=1' to ignore this warning.")
 #  else
@@ -264,7 +264,7 @@ SOFTWARE.
 
 /// @c EMBED_UNREACHABLE()
 #ifndef EMBED_UNREACHABLE
-# if defined(_MSV_CER)
+# if defined(_MSC_VER)
 #  define EMBED_UNREACHABLE() __assume(false)
 # elif defined(__GNUC__) && (__GNUC__ >= 5)
 #  define EMBED_UNREACHABLE() __builtin_unreachable()
@@ -279,7 +279,7 @@ SOFTWARE.
 #if EMBED_CXX_VERSION >= 201103L
 # ifndef EMBED_NO_STD_HEADER
 #  include <cstddef> // std::size_t
-#  include <new> // placement new
+#  include <new> // placement new, std::launder(C++17)
 #  include <utility> // std::move, std::forward, std::addressof
 #  include <type_traits>
 #  include <exception>
@@ -303,7 +303,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] EMBED_UNUSED static EMBED_INLINE void bad_function_call_handler()
+  [[noreturn]] EMBED_UNUSED static inline void bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -314,7 +314,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] EMBED_UNUSED static EMBED_INLINE void bad_function_copy_handler()
+  [[noreturn]] EMBED_UNUSED static inline void bad_function_copy_handler()
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
@@ -354,7 +354,7 @@ namespace detail {
 
   /// @c throw_bad_function_call_or_abort
   // For private use only.
-  [[noreturn]] EMBED_INLINE static void throw_bad_function_call_or_abort()
+  [[noreturn]] static inline void throw_bad_function_call_or_abort()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true )
     throw bad_function_call();
@@ -377,6 +377,21 @@ namespace detail {
     char        buf[BufSize];
   };
 
+  /// @c EMBED_LAUNDER(x)
+# ifndef EMBED_LAUNDER
+#  if ( EMBED_CXX_VERSION >= 201703L ) && !defined(EMBED_NO_STD_HEADER)
+#   define EMBED_LAUNDER(x) std::launder(x)
+#  elif EMBED_HAS_BUILTIN(__builtin_launder)
+  template <typename T>
+  EMBED_NODISCARD EMBED_INLINE constexpr T* launder(T* ptr) noexcept {
+    return __builtin_launder(ptr);
+  }
+#   define EMBED_LAUNDER(x) launder(x)
+#  else
+#   define EMBED_LAUNDER(x) (x)
+#  endif
+# endif
+
   /// @c FnFunctor
   template <std::size_t BufSize>
   union EMBED_ALIAS FnFunctor
@@ -387,13 +402,13 @@ namespace detail {
 
     template <typename T>
     EMBED_INLINE T& M_access() noexcept
-    { return *static_cast<T*>(M_access()); }
+    { return *EMBED_LAUNDER( static_cast<T*>(M_access()) ); }
 
     template <typename T>
     EMBED_INLINE const T& M_access() const noexcept
-    { return *static_cast<const T*>(M_access()); }
+    { return *EMBED_LAUNDER( static_cast<const T*>(M_access()) ); }
 
-    FnBufType<BufSize>   M_unused;
+    FnBufType<BufSize>    M_unused;
     char                  M_pod_data[sizeof(FnBufType<BufSize>)];
   };
 
@@ -828,9 +843,6 @@ namespace detail {
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
     using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
 
-    /// @e Local_Storage
-    /// @brief Judge the functor is small or big.
-
     static constexpr bool noThrowExcept =
       std::is_nothrow_copy_constructible<Functor>::value
       && std::is_nothrow_destructible<Functor>::value;
@@ -840,6 +852,8 @@ namespace detail {
       && alignof(Functor) <= M_max_align
       && (sizeof(Functor) % alignof(Functor) == 0);
 
+    /// @e Local_Storage
+    /// @brief Reserved for future use.
     using Local_Storage = typename
     std::integral_constant<bool,
       noThrowExcept && smallAndAligned
@@ -1005,9 +1019,6 @@ namespace detail {
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
     using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
 
-    /// @e Local_Storage
-    /// @brief Judge the functor is small or big.
-
     static constexpr bool noThrowExcept =
       std::is_nothrow_move_constructible<Functor>::value
       && std::is_nothrow_destructible<Functor>::value;
@@ -1017,6 +1028,8 @@ namespace detail {
       && alignof(Functor) <= M_max_align
       && (sizeof(Functor) % alignof(Functor) == 0);
 
+    /// @e Local_Storage
+    /// @brief Reserved for future use.
     using Local_Storage = typename
     std::integral_constant<bool,
       noThrowExcept && smallAndAligned
@@ -1179,7 +1192,7 @@ namespace detail {
   private:
 
     // The `M_functor` store the callable object.
-    detail::FnFunctor<BufSize>   M_functor{};
+    detail::FnFunctor<BufSize>    M_functor{};
 
     // The `M_manager` describes how to move / copy / destroy the `M_functor`,
     // and even describes how to invoke `M_functor` when not using `M_invoker`.
@@ -1327,8 +1340,8 @@ namespace detail {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = (decltype(M_manager)) &Fn::MyManager<DecayFunctor>::M_manager;
-        M_invoker = (decltype(M_invoker)) &Fn::MyInvoker<DecayFunctor>::M_invoke;
+        M_manager = static_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
+        M_invoker = static_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
       }
     }
 
@@ -1352,8 +1365,8 @@ namespace detail {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = (decltype(M_manager)) &Fn::MyNonCopyable<DecayFunctor>::M_manager;
-        M_invoker = (decltype(M_invoker)) &Fn::MyInvoker<DecayFunctor>::M_invoke;
+        M_manager = static_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
+        M_invoker = static_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
       }
     }
 # endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
@@ -1392,6 +1405,21 @@ namespace detail {
       else
         detail::throw_bad_function_call_or_abort(); /* may not throw exception */
     }
+
+    /// @brief Overload the function specifically for the case where nullptr is
+    /// passed as a parameter, in order to improve the program's running efficiency. 
+    /// (Using the `swap` method would be much slower.)
+    EMBED_INLINE Fn& operator=(std::nullptr_t) noexcept
+    {
+      if (M_manager)
+      {
+        M_manager(M_functor, M_functor, OP_destroy_functor);
+        M_manager = nullptr;
+        M_invoker = nullptr;
+      }
+      return *this;
+    }
+
 #else
 
     // Copy constructor for embed::Fn.
@@ -1475,7 +1503,7 @@ namespace detail {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = (decltype(M_manager)) &Fn::MyManager<DecayFunctor>::M_manager;
+        M_manager = static_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
       }
     }
 
@@ -1499,7 +1527,7 @@ namespace detail {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = (decltype(M_manager)) &Fn::MyNonCopyable<DecayFunctor>::M_manager;
+        M_manager = static_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
       }
     }
 # endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
@@ -1554,6 +1582,19 @@ namespace detail {
 # elif defined(__GNUC__)
 #  pragma GCC diagnostic pop
 # endif
+
+    /// @brief Overload the function specifically for the case where nullptr is
+    /// passed as a parameter, in order to improve the program's running efficiency. 
+    /// (Using the `swap` method would be much slower.)
+    EMBED_INLINE Fn& operator=(std::nullptr_t) noexcept
+    {
+      if (M_manager)
+      {
+        M_manager(M_functor, M_functor, OP_destroy_functor);
+        M_manager = nullptr;
+      }
+      return *this;
+    }
 
 #endif // End EMBED_FN_NEED_FAST_CALL == true or not
 

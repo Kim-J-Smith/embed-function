@@ -118,6 +118,12 @@ void test_002()
 
     std::cout << "<test_002>: [END] Copy and move between embed::Fn\n" << std::endl;
 
+    // test the operator=(std::nullptr_t) is OK
+    fn1 = nullptr;
+    fn2 = nullptr;
+    fn3 = nullptr;
+    fn4 = nullptr;
+
     std::cout << "[END - test_002] : ------ "  "OK"  " ------\n\n" << std::endl;
 }
 

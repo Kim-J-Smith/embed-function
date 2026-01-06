@@ -1,6 +1,6 @@
 # embed-function
 
-![Version - 1.0.7](https://img.shields.io/badge/Version-1.0.7-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
+![Version - 1.0.8](https://img.shields.io/badge/Version-1.0.8-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
 
 ![gcc-c++11/14/17/20/23 - passing](https://img.shields.io/badge/GCC_C++11/14/17/20/23-passing-3215911?style=flat) ![clang-c++11/14/17/20/23 - passing](https://img.shields.io/badge/Clang_C++11/14/17/20/23-passing-3215911?style=flat) ![msvc-c++14/17/20/23 - passing](https://img.shields.io/badge/MSVC_C++14/17/20/23-passing-3215911?style=flat)
 
@@ -83,7 +83,7 @@ int main()
 
   - Be usable with C++11 while offering more functionality for later editions.
     - C++11 offer most functionality.
-    - C++ 17 introduces a template type deduction guide, allowing users to use the underlying type `embed::Fn` (where `embed::function` is an alias for `embed::Fn`) without having to specify the template parameters.
+    - C++17 introduces a template type deduction guide, allowing users to use the underlying type `embed::Fn` (where `embed::function` is an alias for `embed::Fn`) without having to specify the template parameters.
 
   - Be constexpr and exception friendly. As much as possible should be declared constexpr and noexcept.
 
