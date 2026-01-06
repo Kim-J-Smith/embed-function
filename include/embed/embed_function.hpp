@@ -1342,8 +1342,8 @@ namespace detail {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = (decltype(M_manager)) &Fn::MyManager<DecayFunctor>::M_manager;
-        M_invoker = (decltype(M_invoker)) &Fn::MyInvoker<DecayFunctor>::M_invoke;
+        M_manager = static_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
+        M_invoker = static_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
       }
     }
 
@@ -1367,8 +1367,8 @@ namespace detail {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = (decltype(M_manager)) &Fn::MyNonCopyable<DecayFunctor>::M_manager;
-        M_invoker = (decltype(M_invoker)) &Fn::MyInvoker<DecayFunctor>::M_invoke;
+        M_manager = static_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
+        M_invoker = static_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
       }
     }
 # endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
@@ -1490,7 +1490,7 @@ namespace detail {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = (decltype(M_manager)) &Fn::MyManager<DecayFunctor>::M_manager;
+        M_manager = static_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
       }
     }
 
@@ -1514,7 +1514,7 @@ namespace detail {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = (decltype(M_manager)) &Fn::MyNonCopyable<DecayFunctor>::M_manager;
+        M_manager = static_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
       }
     }
 # endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
