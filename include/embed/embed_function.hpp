@@ -1192,7 +1192,7 @@ namespace detail {
   private:
 
     // The `M_functor` store the callable object.
-    detail::FnFunctor<BufSize>   M_functor{};
+    detail::FnFunctor<BufSize>    M_functor{};
 
     // The `M_manager` describes how to move / copy / destroy the `M_functor`,
     // and even describes how to invoke `M_functor` when not using `M_invoker`.

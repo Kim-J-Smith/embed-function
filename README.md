@@ -83,7 +83,7 @@ int main()
 
   - Be usable with C++11 while offering more functionality for later editions.
     - C++11 offer most functionality.
-    - C++ 17 introduces a template type deduction guide, allowing users to use the underlying type `embed::Fn` (where `embed::function` is an alias for `embed::Fn`) without having to specify the template parameters.
+    - C++17 introduces a template type deduction guide, allowing users to use the underlying type `embed::Fn` (where `embed::function` is an alias for `embed::Fn`) without having to specify the template parameters.
 
   - Be constexpr and exception friendly. As much as possible should be declared constexpr and noexcept.
 
