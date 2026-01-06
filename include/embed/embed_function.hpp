@@ -1407,6 +1407,21 @@ namespace detail {
       else
         detail::throw_bad_function_call_or_abort(); /* may not throw exception */
     }
+
+    /// @brief Overload the function specifically for the case where nullptr is
+    /// passed as a parameter, in order to improve the program's running efficiency. 
+    /// (Using the `swap` method would be much slower.)
+    EMBED_INLINE Fn& operator=(std::nullptr_t) noexcept
+    {
+      if (M_manager)
+      {
+        M_manager(M_functor, M_functor, OP_destroy_functor);
+        M_manager = nullptr;
+        M_invoker = nullptr;
+      }
+      return *this;
+    }
+
 #else
 
     // Copy constructor for embed::Fn.
@@ -1569,6 +1584,19 @@ namespace detail {
 # elif defined(__GNUC__)
 #  pragma GCC diagnostic pop
 # endif
+
+    /// @brief Overload the function specifically for the case where nullptr is
+    /// passed as a parameter, in order to improve the program's running efficiency. 
+    /// (Using the `swap` method would be much slower.)
+    EMBED_INLINE Fn& operator=(std::nullptr_t) noexcept
+    {
+      if (M_manager)
+      {
+        M_manager(M_functor, M_functor, OP_destroy_functor);
+        M_manager = nullptr;
+      }
+      return *this;
+    }
 
 #endif // End EMBED_FN_NEED_FAST_CALL == true or not
 
