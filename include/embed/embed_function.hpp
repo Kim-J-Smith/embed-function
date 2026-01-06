@@ -279,7 +279,7 @@ SOFTWARE.
 #if EMBED_CXX_VERSION >= 201103L
 # ifndef EMBED_NO_STD_HEADER
 #  include <cstddef> // std::size_t
-#  include <new> // placement new
+#  include <new> // placement new, std::launder(C++17)
 #  include <utility> // std::move, std::forward, std::addressof
 #  include <type_traits>
 #  include <exception>
@@ -379,7 +379,7 @@ namespace detail {
 
   /// @c EMBED_LAUNDER(x)
 # ifndef EMBED_LAUNDER
-#  if EMBED_CXX_VERSION >= 201703L
+#  if ( EMBED_CXX_VERSION >= 201703L ) && !defined(EMBED_NO_STD_HEADER)
 #   define EMBED_LAUNDER(x) std::launder(x)
 #  elif EMBED_HAS_BUILTIN(__builtin_launder)
   template <typename T>
