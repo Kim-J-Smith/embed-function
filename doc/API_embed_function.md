@@ -66,4 +66,4 @@ namespace embed {
 | std::swap(`embed::Fn`) | specializes the std::swap algorithm
 | operator== | compares a std::function with nullptr
 | operator!= | compares a std::function with nullptr
-| [make_function]() | Factory function, automatically deduces type signatures and the required buffer sizes and constructs an `embed::Fn` instance.
+| [make_function](detail/make_function.md) | Factory function, automatically deduces type signatures and the required buffer sizes and constructs an `embed::Fn` instance.

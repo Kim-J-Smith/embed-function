@@ -11,3 +11,5 @@
 
 <a id="similar_mean">[1]</a>: "Similar" means: The return type and parameter types of the functions are the same, except for the differences in the top-level const modifiers.
 
+
+[Back](../API_embed_function.md)

@@ -3,3 +3,5 @@
 | Destructor | Description
 | --- | ---
 | explicit operator bool() const noexcept; | Checks whether `*this` stores a callable function target, i.e. is not empty.
+
+[Back](../API_embed_function.md)
