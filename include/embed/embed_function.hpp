@@ -843,9 +843,6 @@ namespace detail {
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
     using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
 
-    /// @e Local_Storage
-    /// @brief Judge the functor is small or big.
-
     static constexpr bool noThrowExcept =
       std::is_nothrow_copy_constructible<Functor>::value
       && std::is_nothrow_destructible<Functor>::value;
@@ -855,6 +852,8 @@ namespace detail {
       && alignof(Functor) <= M_max_align
       && (sizeof(Functor) % alignof(Functor) == 0);
 
+    /// @e Local_Storage
+    /// @brief Reserved for future use.
     using Local_Storage = typename
     std::integral_constant<bool,
       noThrowExcept && smallAndAligned
@@ -1020,9 +1019,6 @@ namespace detail {
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
     using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
 
-    /// @e Local_Storage
-    /// @brief Judge the functor is small or big.
-
     static constexpr bool noThrowExcept =
       std::is_nothrow_move_constructible<Functor>::value
       && std::is_nothrow_destructible<Functor>::value;
@@ -1032,6 +1028,8 @@ namespace detail {
       && alignof(Functor) <= M_max_align
       && (sizeof(Functor) % alignof(Functor) == 0);
 
+    /// @e Local_Storage
+    /// @brief Reserved for future use.
     using Local_Storage = typename
     std::integral_constant<bool,
       noThrowExcept && smallAndAligned
