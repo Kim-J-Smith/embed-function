@@ -56,6 +56,11 @@ void t1_007_override_func(int a, float b) {
 }
 
 struct t1_008_struct_02 {
+
+    static void print_static() noexcept {
+        printf("Here is static function");
+    }
+
     t1_008_struct_02(int a)
     {
         this->a = a;
@@ -220,6 +225,8 @@ void test_001()
 
 #endif
 
+    auto fn50 = embed::make_function(&t1_008_struct_02::print_static);
+
     std::cout << "fn46.bufsize = " << fn46.buffer_size << std::endl;
 
     std::cout << "<test_001>: [BEGIN] Test the `make_function`" << std::endl;
@@ -249,6 +256,8 @@ void test_001()
 #if ( EMBED_CXX_VERSION >= 202302L )
     fn49();
 #endif
+
+    fn50();
 
     std::cout << "fn33() = " << tmp_33 << std::endl;
     std::cout << "fn38() = " << tmp_38 << std::endl;
