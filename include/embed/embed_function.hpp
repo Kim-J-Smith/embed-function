@@ -123,7 +123,7 @@ SOFTWARE.
 
 /// @c EMBED_CXX_VERSION
 #ifndef EMBED_CXX_VERSION
-# if defined(_MSC_VER)
+# if defined(_MSC_VER) && ( _MSC_VER >= 1900 )
 #  define EMBED_CXX_VERSION _MSVC_LANG
 # else
 #  define EMBED_CXX_VERSION __cplusplus
@@ -264,7 +264,7 @@ SOFTWARE.
 
 /// @c EMBED_UNREACHABLE()
 #ifndef EMBED_UNREACHABLE
-# if defined(_MSV_CER)
+# if defined(_MSC_VER)
 #  define EMBED_UNREACHABLE() __assume(false)
 # elif defined(__GNUC__) && (__GNUC__ >= 5)
 #  define EMBED_UNREACHABLE() __builtin_unreachable()
