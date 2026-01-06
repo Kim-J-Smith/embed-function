@@ -165,7 +165,7 @@ SOFTWARE.
 #if !EMBED_NO_WARNING
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  if defined(_MSC_VER)
-#   pragma message("[WARNING]: You are using c++ exception, which may consume more ROM.\
+#   pragma message(__FILE__ " [WARNING]: You are using c++ exception, which may consume more ROM.\
  Try not use '/EHs-c- /D _HAS_EXCEPTIONS=0 /wd4577' to disable the exception. Or if you exactly\
  want to enable the exception, then please use '/D EMBED_NO_WARNING=1' to ignore this warning.")
 #  else
@@ -377,6 +377,21 @@ namespace detail {
     char        buf[BufSize];
   };
 
+  /// @c EMBED_LAUNDER(x)
+# ifndef EMBED_LAUNDER
+#  if EMBED_CXX_VERSION >= 201703L
+#   define EMBED_LAUNDER(x) std::launder(x)
+#  elif EMBED_HAS_BUILTIN(__builtin_launder)
+  template <typename T>
+  EMBED_NODISCARD EMBED_INLINE constexpr T* launder(T* ptr) noexcept {
+    return __builtin_launder(ptr);
+  }
+#   define EMBED_LAUNDER(x) launder(x)
+#  else
+#   define EMBED_LAUNDER(x) (x)
+#  endif
+# endif
+
   /// @c FnFunctor
   template <std::size_t BufSize>
   union EMBED_ALIAS FnFunctor
@@ -387,13 +402,13 @@ namespace detail {
 
     template <typename T>
     EMBED_INLINE T& M_access() noexcept
-    { return *static_cast<T*>(M_access()); }
+    { return *EMBED_LAUNDER( static_cast<T*>(M_access()) ); }
 
     template <typename T>
     EMBED_INLINE const T& M_access() const noexcept
-    { return *static_cast<const T*>(M_access()); }
+    { return *EMBED_LAUNDER( static_cast<const T*>(M_access()) ); }
 
-    FnBufType<BufSize>   M_unused;
+    FnBufType<BufSize>    M_unused;
     char                  M_pod_data[sizeof(FnBufType<BufSize>)];
   };
 
