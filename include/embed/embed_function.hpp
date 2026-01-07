@@ -1792,83 +1792,38 @@ namespace detail {
     return function<Signature, BufSize>(fn);
   }
 
+  // Helper macro.
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_)  \
+  F_(, , )                                  \
+  F_(const, , )                             \
+  F_(, volatile, )                          \
+  F_(, , &)                                 \
+  F_(const, volatile, )                     \
+  F_(const, , &)                            \
+  F_(, volatile, &)                         \
+  F_(const, volatile, &)
+
   // Overload for member function.
-  template <typename Class, typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline auto
-  make_function(RetType (Class::* member_func) (ArgsType...)) noexcept
-  -> function<RetType(Class&, ArgsType...), sizeof(member_func)>
-  {
-    return function<RetType(Class&, ArgsType...), sizeof(member_func)>(
-      [member_func](Class& object, ArgsType... args) -> RetType {
-        return (object.*member_func) (args...);
-      }
-    );
+# define EMBED_FN_OVERLOAD_MEMBER_FUNCTION(CONST_, VOLATILE_, REF_)                           \
+  template <typename Class, typename RetType, typename... ArgsType>                           \
+  EMBED_NODISCARD inline auto                                                                 \
+  make_function(RetType (Class::* member_func) (ArgsType...) CONST_ VOLATILE_ REF_) noexcept  \
+  -> function<RetType(CONST_ VOLATILE_ Class&, ArgsType...), sizeof(member_func)> {           \
+    return function<RetType(CONST_ VOLATILE_ Class&, ArgsType...), sizeof(member_func)>(      \
+      [member_func](CONST_ VOLATILE_ Class& object, ArgsType... args) -> RetType {            \
+        return (object.*member_func) (args...);                                               \
+      }                                                                                       \
+    );                                                                                        \
   }
 
-  // Overload for member function. (&)
-  template <typename Class, typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline auto
-  make_function(RetType (Class::* member_func) (ArgsType...) &) noexcept
-  -> function<RetType(Class&, ArgsType...), sizeof(member_func)>
-  {
-    return function<RetType(Class&, ArgsType...), sizeof(member_func)>(
-      [member_func](Class& object, ArgsType... args) -> RetType {
-        return (object.*member_func) (args...);
-      }
-    );
-  }
+  // Here, macros are used to overload the make_function, 
+  // enabling it to adapt to various member functions(const / volatile / &).
+  EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_MEMBER_FUNCTION)
 
-  // Overload for member function. (const)
-  template <typename Class, typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline auto
-  make_function(RetType (Class::* member_func) (ArgsType...) const) noexcept
-  -> function<RetType(const Class&, ArgsType...), sizeof(member_func)>
-  {
-    return function<RetType(const Class&, ArgsType...), sizeof(member_func)>(
-      [member_func](const Class& object, ArgsType... args) -> RetType {
-        return (object.*member_func) (args...);
-      }
-    );
-  }
+# undef EMBED_FN_OVERLOAD_MEMBER_FUNCTION
 
-  // Overload for member function. (const &)
-  template <typename Class, typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline auto
-  make_function(RetType (Class::* member_func) (ArgsType...) const &) noexcept
-  -> function<RetType(const Class&, ArgsType...), sizeof(member_func)>
-  {
-    return function<RetType(const Class&, ArgsType...), sizeof(member_func)>(
-      [member_func](const Class& object, ArgsType... args) -> RetType {
-        return (object.*member_func) (args...);
-      }
-    );
-  }
+# undef EMBED_FN_GENERATE_CODE_C_V_REF
 
-  // Overload for member function. (volatile)
-  template <typename Class, typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline auto
-  make_function(RetType (Class::* member_func) (ArgsType...) volatile) noexcept
-  -> function<RetType(volatile Class&, ArgsType...), sizeof(member_func)>
-  {
-    return function<RetType(volatile Class&, ArgsType...), sizeof(member_func)>(
-      [member_func](volatile Class& object, ArgsType... args) -> RetType {
-        return (object.*member_func) (args...);
-      }
-    );
-  }
-
-  // Overload for member function. (volatile &)
-  template <typename Class, typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline auto
-  make_function(RetType (Class::* member_func) (ArgsType...) volatile &) noexcept
-  -> function<RetType(volatile Class&, ArgsType...), sizeof(member_func)>
-  {
-    return function<RetType(volatile Class&, ArgsType...), sizeof(member_func)>(
-      [member_func](volatile Class& object, ArgsType... args) -> RetType {
-        return (object.*member_func) (args...);
-      }
-    );
-  }
 
 #if ( __cpp_deduction_guides >= 201606 ) || ( EMBED_CXX_VERSION >= 201703L )
 
