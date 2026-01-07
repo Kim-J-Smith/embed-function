@@ -1220,6 +1220,9 @@ namespace detail {
     // The `BufSize` of this embed::Fn object.
     static constexpr std::size_t buffer_size = BufSize;
 
+    // `true` if fast-call mode is enabled.
+    static constexpr bool is_fast_mode = static_cast<bool>(EMBED_FN_NEED_FAST_CALL);
+
   public:
 
     /**
