@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.8
+ * @version     1.0.9
  * 
  * @date        2025-12-6
  * 

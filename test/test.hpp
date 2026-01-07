@@ -104,5 +104,11 @@
     }\
   } while(0)
 
+#define ASSERT_FAIL(msg) \
+  do {\
+    MESSAGE_FAIL("%s", "Assert - Fail");\
+    return 5;\
+  } while(0)
+
 #endif // TEST_HPP___
 
