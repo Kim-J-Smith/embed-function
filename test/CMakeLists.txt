@@ -12,13 +12,13 @@ project("test")
 # Include header search path
 include_directories(${CMAKE_SOURCE_DIR}/../include)
 
+file(GLOB TEST_SOURCES "*-test.cpp")
+
 # Build target
 add_executable(
     ${PROJECT_NAME}
-    ${CMAKE_SOURCE_DIR}/test-001.cpp
-    ${CMAKE_SOURCE_DIR}/test-002.cpp
-    ${CMAKE_SOURCE_DIR}/test-003.cpp
     ${CMAKE_SOURCE_DIR}/main.cpp
+    ${TEST_SOURCES}
 )
 set_target_properties(
     ${PROJECT_NAME}
