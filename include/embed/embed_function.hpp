@@ -1841,6 +1841,32 @@ namespace detail {
     );
   }
 
+  // Overload for member function. (volatile)
+  template <typename Class, typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline auto
+  make_function(RetType (Class::* member_func) (ArgsType...) volatile) noexcept
+  -> function<RetType(volatile Class&, ArgsType...), sizeof(member_func)>
+  {
+    return function<RetType(volatile Class&, ArgsType...), sizeof(member_func)>(
+      [member_func](volatile Class& object, ArgsType... args) -> RetType {
+        return (object.*member_func) (args...);
+      }
+    );
+  }
+
+  // Overload for member function. (volatile &)
+  template <typename Class, typename RetType, typename... ArgsType>
+  EMBED_NODISCARD inline auto
+  make_function(RetType (Class::* member_func) (ArgsType...) volatile &) noexcept
+  -> function<RetType(volatile Class&, ArgsType...), sizeof(member_func)>
+  {
+    return function<RetType(volatile Class&, ArgsType...), sizeof(member_func)>(
+      [member_func](volatile Class& object, ArgsType... args) -> RetType {
+        return (object.*member_func) (args...);
+      }
+    );
+  }
+
 #if ( __cpp_deduction_guides >= 201606 ) || ( EMBED_CXX_VERSION >= 201703L )
 
   // Deduce the template type.
