@@ -374,6 +374,7 @@ namespace detail {
     const void* cvPtr;
     void (* fPtr) ();
 
+    static_assert(BufSize > 0, "embed::Fn require the BufSize greater than 0");
     char        buf[BufSize];
   };
 
