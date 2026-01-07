@@ -37,10 +37,14 @@ public:
 TEST(CreateInstanceFromMemberFunction, NonStatic_MemberFunc) {
     TestClass obj;
     // Bind object to non-static member function
-    auto fn = embed::make_function(&TestClass::non_static_func);
+    auto fn1 = embed::make_function(&TestClass::non_static_func);
+    auto fn2 = embed::make_function([&obj]() { return obj.non_static_func(); });
 
-    ASSERT_EQ(static_cast<bool>(fn), true, "%d");
-    ASSERT_EQ(fn(obj), 1234, "%d");
+    ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn2), true, "%d");
+
+    ASSERT_EQ(fn1(obj), 1234, "%d");
+    ASSERT_EQ(fn2(), 1234, "%d");
     return 0;
 }
 
@@ -56,29 +60,44 @@ TEST(CreateInstanceFromMemberFunction, Static_MemberFunc) {
 // Const Member Function test
 TEST(CreateInstanceFromMemberFunction, Const_MemberFunc) {
     const TestClass obj;
-    auto fn = embed::make_function(&TestClass::const_func);
+    auto fn1 = embed::make_function(&TestClass::const_func);
+    auto fn2 = embed::make_function([&obj]() { return obj.const_func(); });
 
-    ASSERT_EQ(static_cast<bool>(fn), true, "%d");
-    ASSERT_EQ(fn(obj), 9012, "%d");
+    ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn2), true, "%d");
+
+    ASSERT_EQ(fn1(obj), 9012, "%d");
+    ASSERT_EQ(fn2(), 9012, "%d");
     return 0;
 }
 
 // Volatile Member Function test
 TEST(CreateInstanceFromMemberFunction, Volatile_MemberFunc) {
     volatile TestClass obj;
-    auto fn = embed::make_function(&TestClass::volatile_func);
 
-    ASSERT_EQ(static_cast<bool>(fn), true, "%d");
-    ASSERT_EQ(fn(obj), 3456, "%d");
+    auto fn1 = embed::make_function(&TestClass::volatile_func);
+    auto fn2 = embed::make_function([&obj](){ return obj.volatile_func(); });
+
+    ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn2), true, "%d");
+
+    ASSERT_EQ(fn1(obj), 3456, "%d");
+    ASSERT_EQ(fn2(), 3456, "%d");
     return 0;
 }
 
 // Member Function with Args test
 TEST(CreateInstanceFromMemberFunction, MemberFunc_WithArgs) {
     TestClass obj;
-    auto fn = embed::make_function(&TestClass::arg_func);
+    auto fn1 = embed::make_function(&TestClass::arg_func);
+    auto fn2 = embed::make_function(
+        [&obj](const std::string& str, int num){ return obj.arg_func(str, num); }
+    );
 
-    ASSERT_EQ(static_cast<bool>(fn), true, "%d");
-    ASSERT_EQ_STR(fn(obj, "test_", 9527).c_str(), "test_9527");
+    ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn2), true, "%d");
+
+    ASSERT_EQ_STR(fn1(obj, "test_", 9527).c_str(), "test_9527");
+    ASSERT_EQ_STR(fn2("test_", 9528).c_str(), "test_9528");
     return 0;
 }
