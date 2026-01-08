@@ -26,7 +26,7 @@ class TestClass {
 public:
     int non_static_func() { return 1234; }
     static int static_func() { return 5678; }
-    int const_func() const { return 9012; }
+    int const_func() const noexcept { return 9012; }
     int volatile_func() volatile { return 3456; }
     std::string arg_func(const std::string& str, int num) {
         return str + std::to_string(num);

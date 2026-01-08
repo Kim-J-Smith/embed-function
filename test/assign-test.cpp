@@ -24,25 +24,48 @@ TEST(AssignTest, Copy_Assignment) {
     
     ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
     ASSERT_EQ(static_cast<bool>(fn2), true, "%d");
+
+    std::swap(fn1, fn2);
+
+    ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn2), true, "%d");
+
     ASSERT_EQ(fn1(7), 14, "%d");
     ASSERT_EQ(fn2(7), 14, "%d");
 
     fn1 = test_assign_free_func2;
-    ASSERT_EQ(fn1(7), 17, "%d");
-    ASSERT_EQ(fn2(7), 14, "%d");
+
+    std::swap(fn1, fn2);
+    ASSERT_EQ(fn1(7), 14, "%d");
+    ASSERT_EQ(fn2(7), 17, "%d");
 
     return 0;
 }
+
+struct testUse__MoveOnlyClass_
+{
+    int operator()(int a) const { return 2*a; }
+    testUse__MoveOnlyClass_() = default;
+    testUse__MoveOnlyClass_(const testUse__MoveOnlyClass_&) = delete;
+    testUse__MoveOnlyClass_(testUse__MoveOnlyClass_&&) = default;
+};
 
 TEST(AssignTest, Move_Assignment) {
     embed::function<int(int)> fn1 = test_assign_free_func;
     embed::function<int(int)> fn2;
 
     fn2 = std::move(fn1);
+
+    fn2 = testUse__MoveOnlyClass_{};
     
     ASSERT_EQ(static_cast<bool>(fn1), false, "%d");
     ASSERT_EQ(static_cast<bool>(fn2), true, "%d");
     ASSERT_EQ(fn2(6), 12, "%d");
+
+    fn1 = std::move(fn2);
+    ASSERT_EQ(static_cast<bool>(fn2), false, "%d");
+    ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
+    ASSERT_EQ(fn1(6), 12, "%d");
 
     return 0;
 }

@@ -18,7 +18,7 @@
   printf("[       OK ] " #test_suite_name " - " #test_name "\n")
 
 #define MESSAGE_FAIL(msg, ...) \
-  do { printf("[     FAIL ] "); MESSAGE_FMT(msg, __VA_ARGS__); } while(0)
+  do { printf("[  FAILED  ] "); MESSAGE_FMT(msg, __VA_ARGS__); } while(0)
 
 #define MESSAGE_BEGIN(test_suite_name, test_name) \
   printf("[----------] [BEGIN] " #test_suite_name " - " #test_name "\n")
@@ -71,7 +71,7 @@
 #define ASSERT_EQ(A, B, type_format) \
   do {\
     if ((A) != (B)) {\
-      MESSAGE_FAIL("Assert - Equal - Fail\n[---FAIL---] Cause: "\
+      MESSAGE_FAIL("Assert - Equal - Fail\n[---Cause--]: "\
         type_format " != " type_format, (A), (B));\
       return 1;\
     }\
@@ -80,7 +80,7 @@
 #define ASSERT_NE(A, B, type_format) \
   do {\
     if ((A) == (B)) {\
-      MESSAGE_FAIL("Assert - Equal - Fail\n[---FAIL---] Cause: "\
+      MESSAGE_FAIL("Assert - Equal - Fail\n[---Cause--]: "\
         type_format " == " type_format, (A), (B));\
       return 2;\
     }\
@@ -89,7 +89,7 @@
 #define ASSERT_EQ_F(A, B, error_) \
   do {\
     if (((A) - (B) > error_) || ((A) - (B) < -error_)) {\
-      MESSAGE_FAIL("Assert - Equal float - Fail\n[---FAIL---] Cause: "\
+      MESSAGE_FAIL("Assert - Equal float - Fail\n[---Cause--]: "\
         "%f" " != " "%f", (A), (B));\
       return 3;\
     }\
@@ -98,7 +98,7 @@
 #define ASSERT_EQ_STR(A, B) \
   do {\
     if (strcmp(A, B)) {\
-      MESSAGE_FAIL("Assert - Equal str - Fail\n[---FAIL---] Cause: "\
+      MESSAGE_FAIL("Assert - Equal str - Fail\n[---Cause--]: "\
         "%s != %s" , (A), (B));\
       return 4;\
     }\
