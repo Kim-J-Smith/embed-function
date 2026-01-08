@@ -420,7 +420,7 @@ namespace detail {
   public:
 
     // cooperate with M_manager in FnManager
-    enum manOpcode {
+    enum FunctorManagerOpCode {
       OP_clone_functor,
       OP_move_functor,
       OP_destroy_functor,
@@ -944,7 +944,7 @@ namespace detail {
     /// @e M_manager
     // Core func to manager functor.
     static Invoker_Type
-    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, manOpcode op) noexcept
+    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, FunctorManagerOpCode op) noexcept
     {
       Invoker_Type invoker = nullptr;
 
@@ -1118,7 +1118,7 @@ namespace detail {
     /// @e M_manager
     // Core func to manager functor.
     static Invoker_Type
-    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, manOpcode op) noexcept
+    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, FunctorManagerOpCode op) noexcept
     {
       Invoker_Type invoker = nullptr;
 
@@ -1188,7 +1188,7 @@ namespace detail {
     using Invoker_Type = RetType (*) (const detail::FnFunctor<BufSize>&, ArgsType&&...);
 
     using Manager_Type = 
-      Invoker_Type (*) (detail::FnFunctor<BufSize>&, const detail::FnFunctor<BufSize>&, manOpcode) EMBED_CXX17_NOEXCEPT;
+      Invoker_Type (*) (detail::FnFunctor<BufSize>&, const detail::FnFunctor<BufSize>&, FunctorManagerOpCode) EMBED_CXX17_NOEXCEPT;
 
   private:
 
@@ -1793,7 +1793,7 @@ namespace detail {
   }
 
   // Helper macro.
-# define EMBED_FN_GENERATE_CODE_C_V_REF(F_)  \
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
   F_(, , )                                  \
   F_(const, , )                             \
   F_(, volatile, )                          \
