@@ -44,7 +44,7 @@ namespace embed {
 | Member name | Type | Description
 | --- | --- | ---
 | buffer_size | `std::size_t` | The buffer size of the `embed::Fn` object.
-
+| is_fast_mode | `bool` | Keep same as the value of macro EMBED_FN_NEED_FAST_CALL
 
 ### Member functions
 
