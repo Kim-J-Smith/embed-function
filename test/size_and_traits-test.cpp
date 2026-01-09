@@ -24,7 +24,7 @@ TEST(SizeAndTraitsTest, LayoutMatch) {
 
     fn_t fn;
 
-    ASSERT_EQ(expect_size, sizeof(fn), "%llu");
+    ASSERT_EQ(expect_size, sizeof(fn), "%zu");
 
     return 0;
 }

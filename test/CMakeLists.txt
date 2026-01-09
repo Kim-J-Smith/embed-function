@@ -53,6 +53,7 @@ if(MSVC)
     /W4
     /Wall
     /wd4710
+    /wd4127
   )
 else()
   target_compile_options(
@@ -61,6 +62,7 @@ else()
     -Wextra
     -Wpedantic
     -pedantic
+    -fno-permissive
     -O2
   )
 endif()

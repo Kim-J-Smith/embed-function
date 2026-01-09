@@ -5,11 +5,13 @@
 TEST_FUNCTION_DECLARE(AssignTest, Copy_Assignment);
 TEST_FUNCTION_DECLARE(AssignTest, Move_Assignment);
 TEST_FUNCTION_DECLARE(AssignTest, Nullptr_Assignment);
+TEST_FUNCTION_DECLARE(AssignTest, Similar_Assignment);
 
 TEST_SUBSYS(AssignTest, main) {
     TEST_RUN(AssignTest, Copy_Assignment);
     TEST_RUN(AssignTest, Move_Assignment);
     TEST_RUN(AssignTest, Nullptr_Assignment);
+    TEST_RUN(AssignTest, Similar_Assignment);
 }
 
 int test_assign_free_func(int a) { return a * 2; }
@@ -83,6 +85,17 @@ TEST(AssignTest, Nullptr_Assignment) {
     
     fn_void = nullptr;
     ASSERT_EQ(static_cast<bool>(fn_void), false, "%d");
+
+    return 0;
+}
+
+TEST(AssignTest, Similar_Assignment) {
+    using fn_similar_t = embed::function<void(), sizeof(void*)>;
+    using fn_t = embed::function<void(), fn_similar_t::buffer_size + 1>;
+
+    ASSERT_NE(fn_t::buffer_size, fn_similar_t::buffer_size, "%zu");
+    ASSERT_EQ((std::is_constructible<fn_t, fn_similar_t>::value), true, "%d");
+    ASSERT_EQ((std::is_assignable<fn_t, fn_similar_t>::value), true, "%d");
 
     return 0;
 }
