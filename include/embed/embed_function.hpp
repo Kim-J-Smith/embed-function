@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.8
+ * @version     1.0.9
  * 
  * @date        2025-12-6
  * 
@@ -374,19 +374,20 @@ namespace detail {
     const void* cvPtr;
     void (* fPtr) ();
 
+    static_assert(BufSize > 0, "embed::Fn require the BufSize greater than 0");
     char        buf[BufSize];
   };
 
   /// @c EMBED_LAUNDER(x)
 # ifndef EMBED_LAUNDER
 #  if ( EMBED_CXX_VERSION >= 201703L ) && !defined(EMBED_NO_STD_HEADER)
-#   define EMBED_LAUNDER(x) std::launder(x)
+#   define EMBED_LAUNDER(x) ( ::std::launder(x) )
 #  elif EMBED_HAS_BUILTIN(__builtin_launder)
   template <typename T>
   EMBED_NODISCARD EMBED_INLINE constexpr T* launder(T* ptr) noexcept {
     return __builtin_launder(ptr);
   }
-#   define EMBED_LAUNDER(x) launder(x)
+#   define EMBED_LAUNDER(x) ( ::embed::detail::launder(x) )
 #  else
 #   define EMBED_LAUNDER(x) (x)
 #  endif
@@ -419,7 +420,7 @@ namespace detail {
   public:
 
     // cooperate with M_manager in FnManager
-    enum manOpcode {
+    enum FunctorManagerOpCode {
       OP_clone_functor,
       OP_move_functor,
       OP_destroy_functor,
@@ -606,10 +607,7 @@ namespace detail {
     template <typename RetFrom, typename RetTo>
     struct results_are_same
     {
-      using nc_From = typename std::remove_const<RetFrom>::type;
-      using nc_To = typename std::remove_const<RetTo>::type;
-
-      static constexpr bool value = std::is_same<nc_From, nc_To>::value;
+      static constexpr bool value = std::is_same<RetFrom, RetTo>::value;
     };
 
     /// @e args_package
@@ -640,8 +638,8 @@ namespace detail {
     template <typename ArgsPackageFrom, typename ArgsPackageTo, std::size_t Idx>
     struct arguments_are_same_impl
     {
-      using FromType = typename std::remove_const<typename unwrap_package<Idx, ArgsPackageFrom>::type>::type;
-      using ToType = typename std::remove_const<typename unwrap_package<Idx, ArgsPackageTo>::type>::type;
+      using FromType = typename unwrap_package<Idx, ArgsPackageFrom>::type;
+      using ToType = typename unwrap_package<Idx, ArgsPackageTo>::type;
 
       static constexpr bool value = std::is_same<
         FromType, ToType  
@@ -651,8 +649,8 @@ namespace detail {
     template <typename ArgsPackageFrom, typename ArgsPackageTo>
     struct arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, 0>
     {
-      using FromType = typename std::remove_const<typename unwrap_package<0, ArgsPackageFrom>::type>::type;
-      using ToType = typename std::remove_const<typename unwrap_package<0, ArgsPackageTo>::type>::type;
+      using FromType = typename unwrap_package<0, ArgsPackageFrom>::type;
+      using ToType = typename unwrap_package<0, ArgsPackageTo>::type;
 
       static constexpr bool value = std::is_same<
         FromType, ToType
@@ -943,7 +941,7 @@ namespace detail {
     /// @e M_manager
     // Core func to manager functor.
     static Invoker_Type
-    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, manOpcode op) noexcept
+    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, FunctorManagerOpCode op) EMBED_CXX17_NOEXCEPT
     {
       Invoker_Type invoker = nullptr;
 
@@ -1117,7 +1115,7 @@ namespace detail {
     /// @e M_manager
     // Core func to manager functor.
     static Invoker_Type
-    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, manOpcode op) noexcept
+    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, FunctorManagerOpCode op) EMBED_CXX17_NOEXCEPT
     {
       Invoker_Type invoker = nullptr;
 
@@ -1187,7 +1185,7 @@ namespace detail {
     using Invoker_Type = RetType (*) (const detail::FnFunctor<BufSize>&, ArgsType&&...);
 
     using Manager_Type = 
-      Invoker_Type (*) (detail::FnFunctor<BufSize>&, const detail::FnFunctor<BufSize>&, manOpcode) EMBED_CXX17_NOEXCEPT;
+      Invoker_Type (*) (detail::FnFunctor<BufSize>&, const detail::FnFunctor<BufSize>&, FunctorManagerOpCode) EMBED_CXX17_NOEXCEPT;
 
   private:
 
@@ -1218,6 +1216,9 @@ namespace detail {
 
     // The `BufSize` of this embed::Fn object.
     static constexpr std::size_t buffer_size = BufSize;
+
+    // `true` if fast-call mode is enabled.
+    static constexpr bool is_fast_mode = static_cast<bool>(EMBED_FN_NEED_FAST_CALL);
 
   public:
 
@@ -1340,8 +1341,13 @@ namespace detail {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = static_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
-        M_invoker = static_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
+        static_assert(
+          std::is_same<Manager_Type, decltype(&Fn::MyManager<DecayFunctor>::M_manager)>::value
+          && std::is_same<Invoker_Type, decltype(&Fn::MyInvoker<DecayFunctor>::M_invoke)>::value,
+          "The library ensures that the types of the two are consistent."
+        );
+        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
+        M_invoker = reinterpret_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
       }
     }
 
@@ -1365,8 +1371,13 @@ namespace detail {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = static_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
-        M_invoker = static_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
+        static_assert(
+          std::is_same<Manager_Type, decltype(&Fn::MyNonCopyable<DecayFunctor>::M_manager)>::value
+          && std::is_same<Invoker_Type, decltype(&Fn::MyInvoker<DecayFunctor>::M_invoke)>::value,
+          "The library ensures that the types of the two are consistent."
+        );
+        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
+        M_invoker = reinterpret_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
       }
     }
 # endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
@@ -1503,7 +1514,11 @@ namespace detail {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = static_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
+        static_assert(
+          std::is_same<Manager_Type, decltype(&Fn::MyManager<DecayFunctor>::M_manager)>::value,
+          "The library ensures that the types of the two are consistent."
+        );
+        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
       }
     }
 
@@ -1527,7 +1542,11 @@ namespace detail {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = static_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
+        static_assert(
+          std::is_same<Manager_Type, decltype(&Fn::MyNonCopyable<DecayFunctor>::M_manager)>::value,
+          "The library ensures that the types of the two are consistent."
+        );
+        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
       }
     }
 # endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
@@ -1788,57 +1807,38 @@ namespace detail {
     return function<Signature, BufSize>(fn);
   }
 
+  // Helper macro.
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
+  F_(, , )                                  \
+  F_(const, , )                             \
+  F_(, volatile, )                          \
+  F_(, , &)                                 \
+  F_(const, volatile, )                     \
+  F_(const, , &)                            \
+  F_(, volatile, &)                         \
+  F_(const, volatile, &)
+
   // Overload for member function.
-  template <typename Class, typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline auto
-  make_function(RetType (Class::* member_func) (ArgsType...)) noexcept
-  -> function<RetType(Class&, ArgsType...), sizeof(member_func)>
-  {
-    return function<RetType(Class&, ArgsType...), sizeof(member_func)>(
-      [member_func](Class& object, ArgsType... args) -> RetType {
-        return (object.*member_func) (args...);
-      }
-    );
+# define EMBED_FN_OVERLOAD_MEMBER_FUNCTION(CONST_, VOLATILE_, REF_)                           \
+  template <typename Class, typename RetType, typename... ArgsType>                           \
+  EMBED_NODISCARD inline auto                                                                 \
+  make_function(RetType (Class::* member_func) (ArgsType...) CONST_ VOLATILE_ REF_) noexcept  \
+  -> function<RetType(CONST_ VOLATILE_ Class&, ArgsType...), sizeof(member_func)> {           \
+    return function<RetType(CONST_ VOLATILE_ Class&, ArgsType...), sizeof(member_func)>(      \
+      [member_func](CONST_ VOLATILE_ Class& object, ArgsType... args) -> RetType {            \
+        return (object.*member_func) (args...);                                               \
+      }                                                                                       \
+    );                                                                                        \
   }
 
-  // Overload for member function. (&)
-  template <typename Class, typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline auto
-  make_function(RetType (Class::* member_func) (ArgsType...) &) noexcept
-  -> function<RetType(Class&, ArgsType...), sizeof(member_func)>
-  {
-    return function<RetType(Class&, ArgsType...), sizeof(member_func)>(
-      [member_func](Class& object, ArgsType... args) -> RetType {
-        return (object.*member_func) (args...);
-      }
-    );
-  }
+  // Here, macros are used to overload the make_function, 
+  // enabling it to adapt to various member functions(const / volatile / &).
+  EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_MEMBER_FUNCTION)
 
-  // Overload for member function. (const)
-  template <typename Class, typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline auto
-  make_function(RetType (Class::* member_func) (ArgsType...) const) noexcept
-  -> function<RetType(const Class&, ArgsType...), sizeof(member_func)>
-  {
-    return function<RetType(const Class&, ArgsType...), sizeof(member_func)>(
-      [member_func](const Class& object, ArgsType... args) -> RetType {
-        return (object.*member_func) (args...);
-      }
-    );
-  }
+# undef EMBED_FN_OVERLOAD_MEMBER_FUNCTION
 
-  // Overload for member function. (const &)
-  template <typename Class, typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline auto
-  make_function(RetType (Class::* member_func) (ArgsType...) const &) noexcept
-  -> function<RetType(const Class&, ArgsType...), sizeof(member_func)>
-  {
-    return function<RetType(const Class&, ArgsType...), sizeof(member_func)>(
-      [member_func](const Class& object, ArgsType... args) -> RetType {
-        return (object.*member_func) (args...);
-      }
-    );
-  }
+# undef EMBED_FN_GENERATE_CODE_C_V_REF
+
 
 #if ( __cpp_deduction_guides >= 201606 ) || ( EMBED_CXX_VERSION >= 201703L )
 

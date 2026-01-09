@@ -1,12 +1,21 @@
-extern void test_001();
-extern void test_002();
-extern void test_003();
+#include "test.hpp"
+
+TEST_SUBSYS_DECLARE(CreateInstanceFromFreeFunction, main);
+TEST_SUBSYS_DECLARE(CreateInstanceFromLambda, main);
+TEST_SUBSYS_DECLARE(CreateInstanceFromMemberFunction, main);
+TEST_SUBSYS_DECLARE(CreateInstanceFromFunctor, main);
+TEST_SUBSYS_DECLARE(AssignTest, main);
+TEST_SUBSYS_DECLARE(SizeAndTraitsTest, main);
 
 int main()
 {
-    test_001();
-    test_002();
-    test_003();
+
+    TEST_RUN_SUBSYS(CreateInstanceFromFreeFunction, main);
+    TEST_RUN_SUBSYS(CreateInstanceFromLambda, main);
+    TEST_RUN_SUBSYS(CreateInstanceFromMemberFunction, main);
+    TEST_RUN_SUBSYS(CreateInstanceFromFunctor, main);
+    TEST_RUN_SUBSYS(AssignTest, main);
+    TEST_RUN_SUBSYS(SizeAndTraitsTest, main);
 
     return 0;
 }
