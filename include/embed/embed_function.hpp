@@ -607,10 +607,7 @@ namespace detail {
     template <typename RetFrom, typename RetTo>
     struct results_are_same
     {
-      using nc_From = typename std::remove_const<RetFrom>::type;
-      using nc_To = typename std::remove_const<RetTo>::type;
-
-      static constexpr bool value = std::is_same<nc_From, nc_To>::value;
+      static constexpr bool value = std::is_same<RetFrom, RetTo>::value;
     };
 
     /// @e args_package
@@ -641,8 +638,8 @@ namespace detail {
     template <typename ArgsPackageFrom, typename ArgsPackageTo, std::size_t Idx>
     struct arguments_are_same_impl
     {
-      using FromType = typename std::remove_const<typename unwrap_package<Idx, ArgsPackageFrom>::type>::type;
-      using ToType = typename std::remove_const<typename unwrap_package<Idx, ArgsPackageTo>::type>::type;
+      using FromType = typename unwrap_package<Idx, ArgsPackageFrom>::type;
+      using ToType = typename unwrap_package<Idx, ArgsPackageTo>::type;
 
       static constexpr bool value = std::is_same<
         FromType, ToType  
@@ -652,8 +649,8 @@ namespace detail {
     template <typename ArgsPackageFrom, typename ArgsPackageTo>
     struct arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, 0>
     {
-      using FromType = typename std::remove_const<typename unwrap_package<0, ArgsPackageFrom>::type>::type;
-      using ToType = typename std::remove_const<typename unwrap_package<0, ArgsPackageTo>::type>::type;
+      using FromType = typename unwrap_package<0, ArgsPackageFrom>::type;
+      using ToType = typename unwrap_package<0, ArgsPackageTo>::type;
 
       static constexpr bool value = std::is_same<
         FromType, ToType
