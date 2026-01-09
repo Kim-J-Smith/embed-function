@@ -941,7 +941,7 @@ namespace detail {
     /// @e M_manager
     // Core func to manager functor.
     static Invoker_Type
-    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, FunctorManagerOpCode op) noexcept
+    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, FunctorManagerOpCode op) EMBED_CXX17_NOEXCEPT
     {
       Invoker_Type invoker = nullptr;
 
@@ -1115,7 +1115,7 @@ namespace detail {
     /// @e M_manager
     // Core func to manager functor.
     static Invoker_Type
-    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, FunctorManagerOpCode op) noexcept
+    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, FunctorManagerOpCode op) EMBED_CXX17_NOEXCEPT
     {
       Invoker_Type invoker = nullptr;
 
@@ -1341,8 +1341,13 @@ namespace detail {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = static_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
-        M_invoker = static_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
+        static_assert(
+          std::is_same<Manager_Type, decltype(&Fn::MyManager<DecayFunctor>::M_manager)>::value
+          && std::is_same<Invoker_Type, decltype(&Fn::MyInvoker<DecayFunctor>::M_invoke)>::value,
+          "The library ensures that the types of the two are consistent."
+        );
+        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
+        M_invoker = reinterpret_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
       }
     }
 
@@ -1366,8 +1371,13 @@ namespace detail {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = static_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
-        M_invoker = static_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
+        static_assert(
+          std::is_same<Manager_Type, decltype(&Fn::MyNonCopyable<DecayFunctor>::M_manager)>::value
+          && std::is_same<Invoker_Type, decltype(&Fn::MyInvoker<DecayFunctor>::M_invoke)>::value,
+          "The library ensures that the types of the two are consistent."
+        );
+        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
+        M_invoker = reinterpret_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
       }
     }
 # endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
@@ -1504,7 +1514,11 @@ namespace detail {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = static_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
+        static_assert(
+          std::is_same<Manager_Type, decltype(&Fn::MyManager<DecayFunctor>::M_manager)>::value,
+          "The library ensures that the types of the two are consistent."
+        );
+        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyManager<DecayFunctor>::M_manager);
       }
     }
 
@@ -1528,7 +1542,11 @@ namespace detail {
         Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
-        M_manager = static_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
+        static_assert(
+          std::is_same<Manager_Type, decltype(&Fn::MyNonCopyable<DecayFunctor>::M_manager)>::value,
+          "The library ensures that the types of the two are consistent."
+        );
+        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
       }
     }
 # endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
