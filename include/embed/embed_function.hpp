@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.9
+ * @version     1.1.0
  * 
  * @date        2025-12-6
  * 
@@ -110,10 +110,13 @@ SOFTWARE.
 
 /// @note User can customize following configs
 
-// Need fast call or not (fast call consume more RAM).
-// The rate of function calls is improved by about 65% when fast-call is enabled.
-// With fast-call enabled, each instance of embed::function uses an extra pointer-sized RAM.
-#define EMBED_FN_NEED_FAST_CALL     false
+/**
+ * When fast invocation is enabled, the rate of function calls increases
+ * by approximately 50%, which is consistent with the invocation overhead
+ * of `std::function`. With fast-call enabled, each instance of 
+ * `embed::function` uses an extra pointer-sized RAM.
+ */
+#define EMBED_FN_NEED_FAST_CALL     true
 
 // assert nothrow callable function
 #define EMBED_FN_NOTHROW_CALLABLE   false
@@ -421,11 +424,13 @@ namespace detail {
 
     // cooperate with M_manager in FnManager
     enum FunctorManagerOpCode {
-      OP_clone_functor,
-      OP_move_functor,
-      OP_destroy_functor,
+      OP_clone_functor,     // Clone the M_functor
+      OP_move_functor,      // Move the M_functor
+      OP_destroy_functor,   // Destroy the M_functor
 
 #if ( EMBED_FN_NEED_FAST_CALL == false )
+      // M_invoker is not a member of embed::Fn in this mode,
+      // so use OP_get_invoker to get it.
       OP_get_invoker,
 #endif
     };
