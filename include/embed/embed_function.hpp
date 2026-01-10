@@ -52,7 +52,7 @@ SOFTWARE.
  * (more details: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4159.pdf)
  * 
  * By default, the space occupied by a single instance is only the size of
- * 2 pointers. For larger lambda function objects, `embed::function`
+ * 2 pointers(buffer + manager). For larger lambda function objects, `embed::function`
  * allows users to specify the second template parameter, that is, the
  * buffer size to accommodate it (but such behavior is not recommended.
  * It is a better choice to wrap it with a lambda function and then pass it in).
@@ -114,7 +114,8 @@ SOFTWARE.
  * When fast invocation is enabled, the rate of function calls increases
  * by approximately 50%, which is consistent with the invocation overhead
  * of `std::function`. With fast-call enabled, each instance of 
- * `embed::function` uses an extra pointer-sized RAM.
+ * `embed::function` uses an extra pointer-sized RAM (In the fast mode,
+ * it occupies a total of two pointer sizes plus the buffer size of RAM space).
  */
 #define EMBED_FN_NEED_FAST_CALL     true
 
@@ -396,7 +397,14 @@ namespace detail {
 #  endif
 # endif
 
-  /// @c FnFunctor
+  /**
+   * @c FnFunctor
+   * @note FnFunctor is trivial. 
+   * The well defined operation of reusing its storage space is to use
+   * placement new. After that, using M_access to obtain the address or reference
+   * (rather than the content) is also in accordance with the C++ standard.
+   * See https://eel.is/c++draft/basic.life#7
+   */
   template <std::size_t BufSize>
   union EMBED_ALIAS FnFunctor
   {
