@@ -839,7 +839,7 @@ namespace detail {
     constexpr static std::size_t M_max_align = alignof(FnBufType<BufSize>);
 
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
 
     static constexpr bool noThrowExcept =
       std::is_nothrow_copy_constructible<Functor>::value
@@ -993,7 +993,7 @@ namespace detail {
   public:
 
     static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
-    noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
+    EMBED_FN_CASE_NOEXCEPT
     {
       return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
         std::forward<ArgsType>(args)...);
@@ -1015,7 +1015,7 @@ namespace detail {
     constexpr static std::size_t M_max_align = alignof(FnBufType<BufSize>);
 
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
 
     static constexpr bool noThrowExcept =
       std::is_nothrow_move_constructible<Functor>::value
@@ -1182,7 +1182,7 @@ namespace detail {
     template <typename Functor>
     using Callable = FnTraits::Callable<RetType, Functor, ArgsType...>;
 
-    using Invoker_Type = RetType (*) (const detail::FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const detail::FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
 
     using Manager_Type = 
       Invoker_Type (*) (detail::FnFunctor<BufSize>&, const detail::FnFunctor<BufSize>&, FunctorManagerOpCode) EMBED_CXX17_NOEXCEPT;
