@@ -122,6 +122,9 @@ SOFTWARE.
 // assert nothrow callable function
 #define EMBED_FN_NOTHROW_CALLABLE   false
 
+// Ensure that no exceptions are thrown when invoking if `true`
+#define EMBED_FN_ENSURE_NO_THROW    true
+
 ////////////////////////////////////////////////////////////////
 
 
@@ -360,7 +363,7 @@ namespace detail {
   // For private use only.
   [[noreturn]] static inline void throw_bad_function_call_or_abort()
   {
-#if ( EMBED_CXX_ENABLE_EXCEPTION == true )
+#if ( EMBED_CXX_ENABLE_EXCEPTION == true ) && (! EMBED_FN_ENSURE_NO_THROW)
     throw bad_function_call();
 #else
     bad_function_call_handler();
@@ -399,11 +402,17 @@ namespace detail {
 
   /**
    * @c FnFunctor
-   * @note FnFunctor is trivial. 
+   * @note FnFunctor is trivial.
+   * 
    * The well defined operation of reusing its storage space is to use
    * placement new. After that, using M_access to obtain the address or reference
    * (rather than the content) is also in accordance with the C++ standard.
    * See https://eel.is/c++draft/basic.life#7
+   * 
+   * This EMBED_ALIAS serves only as an auxiliary function.
+   * It prevents the compiler from performing aggressive optimizations.
+   * Even if the EMBED_ALIAS does not exist, the reuse of the FnFunctor's
+   * memory and the subsequent use of M_access for access are well-defined.
    */
   template <std::size_t BufSize>
   union EMBED_ALIAS FnFunctor
@@ -1905,6 +1914,7 @@ namespace std EMBED_ABI_VISIBILITY(default)
 #undef EMBED_FN_NEED_FAST_CALL
 #undef EMBED_FN_NOTHROW_CALLABLE
 #undef EMBED_FN_CASE_NOEXCEPT
+#undef EMBED_FN_ENSURE_NO_THROW
 
 #if defined(_MSC_VER)
 # pragma warning(pop)
