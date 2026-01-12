@@ -122,13 +122,15 @@ SOFTWARE.
 // assert nothrow callable function
 #define EMBED_FN_NOTHROW_CALLABLE   false
 
-// Ensure that no exceptions are thrown when invoking if `true`
+// Ensure that no `bad_function_call` exception is thrown if true.
+// When an empty embed::Fn is called, the `bad_function_call_handler` function 
+// will be invoked for handling. This function can be customized by the user.
 #define EMBED_FN_ENSURE_NO_THROW    true
 
 ////////////////////////////////////////////////////////////////
 
 
-/// @c EMBED_CXX_VERSION
+// The accurate version of C++.
 #ifndef EMBED_CXX_VERSION
 # if defined(_MSC_VER) && ( _MSC_VER >= 1900 )
 #  define EMBED_CXX_VERSION _MSVC_LANG
@@ -890,7 +892,8 @@ namespace detail {
   private:
     /// @e M_create
     /// Q: Why not use Functor, but use the `Func`?
-    /// A: Because this is perfect forward, need compiler deduce `Func` instead of specify it.
+    /// A: Because this is Perfect Forwarding, so compiler need to
+    /// deduce the type of `Func`, rather than explicitly specifying it.
     template <typename Func>
     static void M_create(FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
