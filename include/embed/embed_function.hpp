@@ -290,6 +290,7 @@ SOFTWARE.
 #  include <cstddef> // std::size_t
 #  include <new> // placement new, std::launder(C++17)
 #  include <utility> // std::move, std::forward, std::addressof
+#  include <functional> // std::bad_function_call
 #  include <type_traits>
 #  include <exception>
 # else
@@ -343,6 +344,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 namespace detail {
 
+#if defined(EMBED_NO_STD_HEADER)
   /**
    *  @brief Exception class thrown when class template function's
    *  operator() is called with an empty target.
@@ -360,6 +362,9 @@ namespace detail {
       return "embed::Fn::operator() is called with an empty target";
     };
   };
+#else
+  using std::bad_function_call;
+#endif
 
   /// @c throw_bad_function_call_or_abort
   // For private use only.
