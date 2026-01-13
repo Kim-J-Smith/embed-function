@@ -40,19 +40,19 @@ SOFTWARE.
  * allocation of heap memory, virtual function. Whats more, user
  * can even disable the c++ exception to decrease ROM consumption.
  * 
- * The usage method of `embed::function` is almost exactly the same
- * as that of `std::function`. If users are familiar with the operation
- * of std::function, they can quickly get familiar with `embed::function`
- * as well. embed::function ensures that no heap memory is used. 
+ * The usage method of embed::function is almost exactly the same
+ * as that of std::function. If users are familiar with the operation
+ * of std::function, they can quickly get familiar with embed::function
+ * as well. embed::function ensures that no heap memory is used.
  * 
- * After careful consideration, `embed::function` does not plan to implement
+ * After careful consideration, embed::function does not plan to implement
  * the `target_type()` and `target()` member functions. The main reason for 
  * the former is that it relies on RTTI, which is often disabled in the embedded 
  * domain. The latter is due to the reason of thread-safe access isolation.
  * (more details: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4159.pdf)
  * 
  * By default, the space occupied by a single instance is only the size of
- * 2 pointers(buffer + manager). For larger lambda function objects, `embed::function`
+ * 2 pointers(buffer + manager). For larger lambda function objects, embed::function
  * allows users to specify the second template parameter, that is, the
  * buffer size to accommodate it (but such behavior is not recommended.
  * It is a better choice to wrap it with a lambda function and then pass it in).
