@@ -313,7 +313,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] EMBED_UNUSED static inline void bad_function_call_handler()
+  [[noreturn]] EMBED_UNUSED inline void bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -324,7 +324,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] EMBED_UNUSED static inline void bad_function_copy_handler()
+  [[noreturn]] EMBED_UNUSED inline void bad_function_copy_handler()
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
@@ -1692,13 +1692,13 @@ namespace detail {
     }
 
     // check if the embed::Fn is empty.
-    EMBED_INLINE bool is_empty() const noexcept
+    EMBED_INLINE constexpr bool is_empty() const noexcept
     {
       return static_cast<bool>( M_manager == nullptr );
     }
 
     // `true` if the embed::Fn is not empty.
-    EMBED_INLINE explicit operator bool() const noexcept
+    EMBED_INLINE constexpr explicit operator bool() const noexcept
     {
       return !is_empty();
     }
@@ -1709,25 +1709,25 @@ namespace detail {
 
   // `true` if the wrapper has no target, `false` otherwise. (noexcept)
   template <typename Signature, std::size_t BufSize>
-  static inline bool
+  static EMBED_INLINE constexpr bool
   operator==(const Fn<Signature, BufSize>& fn, std::nullptr_t) noexcept
   { return fn.is_empty(); }
 
   // `true` if the wrapper has no target, `false` otherwise. (noexcept)
   template <typename Signature, std::size_t BufSize>
-  static inline bool
+  static EMBED_INLINE constexpr bool
   operator==(std::nullptr_t, const Fn<Signature, BufSize>& fn) noexcept
   { return fn.is_empty(); }
 
   // `true` if the wrapper does have target, `false` otherwise. (noexcept)
   template <typename Signature, std::size_t BufSize>
-  static inline bool
+  static EMBED_INLINE constexpr bool
   operator!=(const Fn<Signature, BufSize>& fn, std::nullptr_t) noexcept
   { return !fn.is_empty(); }
 
   // `true` if the wrapper does have target, `false` otherwise. (noexcept)
   template <typename Signature, std::size_t BufSize>
-  static inline bool
+  static EMBED_INLINE constexpr bool
   operator!=(std::nullptr_t, const Fn<Signature, BufSize>& fn) noexcept
   { return !fn.is_empty(); }
 
