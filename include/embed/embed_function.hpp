@@ -284,6 +284,17 @@ SOFTWARE.
 # endif
 #endif
 
+/// @c EMBED_PUSH_STD @c EMBED_POP_STD
+#ifndef EMBED_PUSH_STD
+# if defined(__GNUC__) || defined(__clang__) || defined(_MSC_VER) || defined(__INTEL_COMPILER)
+#  define EMBED_PUSH_STD _Pragma("push_macro(\"std\")")
+#  define EMBED_POP_STD _Pragma("pop_macro(\"std\")")
+# else
+#  define EMBED_PUSH_STD
+#  define EMBED_POP_STD
+# endif
+#endif
+
 // Header files
 #if EMBED_CXX_VERSION >= 201103L
 # ifndef EMBED_NO_STD_HEADER
@@ -296,6 +307,7 @@ SOFTWARE.
 # else
 /// @brief In some extreme cases, users cannot use standard header files.
 /// Here, alternative solutions are provided.
+EMBED_PUSH_STD
 #  include "embed_function_nostd.hpp"
 #  define std detail::fn_no_std
 # endif
@@ -1905,6 +1917,7 @@ namespace detail {
 
 #if defined(EMBED_NO_STD_HEADER)
 # undef std
+EMBED_POP_STD
 #endif
 
 // std::swap
