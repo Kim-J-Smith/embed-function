@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.0.9
+ * @version     1.1.0
  * 
  * @date        2025-12-6
  * 
@@ -40,19 +40,19 @@ SOFTWARE.
  * allocation of heap memory, virtual function. Whats more, user
  * can even disable the c++ exception to decrease ROM consumption.
  * 
- * The usage method of `embed::function` is almost exactly the same
- * as that of `std::function`. If users are familiar with the operation
- * of std::function, they can quickly get familiar with `embed::function`
- * as well. embed::function ensures that no heap memory is used. 
+ * The usage method of embed::function is almost exactly the same
+ * as that of std::function. If users are familiar with the operation
+ * of std::function, they can quickly get familiar with embed::function
+ * as well. embed::function ensures that no heap memory is used.
  * 
- * After careful consideration, `embed::function` does not plan to implement
+ * After careful consideration, embed::function does not plan to implement
  * the `target_type()` and `target()` member functions. The main reason for 
  * the former is that it relies on RTTI, which is often disabled in the embedded 
  * domain. The latter is due to the reason of thread-safe access isolation.
  * (more details: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4159.pdf)
  * 
  * By default, the space occupied by a single instance is only the size of
- * 2 pointers. For larger lambda function objects, `embed::function`
+ * 2 pointers(buffer + manager). For larger lambda function objects, embed::function
  * allows users to specify the second template parameter, that is, the
  * buffer size to accommodate it (but such behavior is not recommended.
  * It is a better choice to wrap it with a lambda function and then pass it in).
@@ -104,24 +104,33 @@ SOFTWARE.
 
 #if defined(_MSC_VER)
 # pragma warning(push)
-# pragma warning(disable: 4514 4668 4005 4710)
+# pragma warning(disable: 4514 4668 4005 4710 4371)
 #endif
 ////////////////////////////////////////////////////////////////
 
 /// @note User can customize following configs
 
-// Need fast call or not (fast call consume more RAM).
-// The rate of function calls is improved by about 65% when fast-call is enabled.
-// With fast-call enabled, each instance of embed::function uses an extra pointer-sized RAM.
+/**
+ * When fast invocation is enabled, the rate of function calls increases
+ * by approximately 50%, which is consistent with the invocation overhead
+ * of `std::function`. With fast-call enabled, each instance of 
+ * `embed::function` uses an extra pointer-sized RAM (In the fast mode,
+ * it occupies a total of two pointer sizes plus the buffer size of RAM space).
+ */
 #define EMBED_FN_NEED_FAST_CALL     false
 
 // assert nothrow callable function
 #define EMBED_FN_NOTHROW_CALLABLE   false
 
+// Ensure that no `bad_function_call` exception is thrown if true.
+// When an empty embed::Fn is called, the `bad_function_call_handler` function 
+// will be invoked for handling. This function can be customized by the user.
+#define EMBED_FN_ENSURE_NO_THROW    true
+
 ////////////////////////////////////////////////////////////////
 
 
-/// @c EMBED_CXX_VERSION
+// The accurate version of C++.
 #ifndef EMBED_CXX_VERSION
 # if defined(_MSC_VER) && ( _MSC_VER >= 1900 )
 #  define EMBED_CXX_VERSION _MSVC_LANG
@@ -275,22 +284,36 @@ SOFTWARE.
 # endif
 #endif
 
+/// @c EMBED_PUSH_STD @c EMBED_POP_STD
+#ifndef EMBED_PUSH_STD
+# if defined(__GNUC__) || defined(__clang__) || defined(_MSC_VER) || defined(__INTEL_COMPILER)
+#  define EMBED_PUSH_STD _Pragma("push_macro(\"std\")")
+#  define EMBED_POP_STD _Pragma("pop_macro(\"std\")")
+# else
+#  define EMBED_PUSH_STD
+#  define EMBED_POP_STD
+# endif
+#endif
+
 // Header files
 #if EMBED_CXX_VERSION >= 201103L
 # ifndef EMBED_NO_STD_HEADER
 #  include <cstddef> // std::size_t
 #  include <new> // placement new, std::launder(C++17)
 #  include <utility> // std::move, std::forward, std::addressof
+#  include <functional> // std::bad_function_call
 #  include <type_traits>
 #  include <exception>
 # else
 /// @brief In some extreme cases, users cannot use standard header files.
 /// Here, alternative solutions are provided.
+EMBED_PUSH_STD
 #  include "embed_function_nostd.hpp"
 #  define std detail::fn_no_std
 # endif
 #else
-# error embed_func need C++11 or greater version, try use '-std=c++11'.
+# error The embed-function requires the support of syntax features of C++11.\
+ You can use the -std=c++11 compilation option, or simply switch to a newer compiler.
 #endif
 
 ////////////////////////////////////////////////////////////////
@@ -303,7 +326,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] EMBED_UNUSED static inline void bad_function_call_handler()
+  [[noreturn]] EMBED_UNUSED inline void bad_function_call_handler()
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -314,7 +337,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] EMBED_UNUSED static inline void bad_function_copy_handler()
+  [[noreturn]] EMBED_UNUSED inline void bad_function_copy_handler()
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
@@ -334,6 +357,7 @@ namespace embed EMBED_ABI_VISIBILITY(default)
 
 namespace detail {
 
+#if defined(EMBED_NO_STD_HEADER)
   /**
    *  @brief Exception class thrown when class template function's
    *  operator() is called with an empty target.
@@ -351,12 +375,15 @@ namespace detail {
       return "embed::Fn::operator() is called with an empty target";
     };
   };
+#else
+  using std::bad_function_call;
+#endif
 
   /// @c throw_bad_function_call_or_abort
   // For private use only.
   [[noreturn]] static inline void throw_bad_function_call_or_abort()
   {
-#if ( EMBED_CXX_ENABLE_EXCEPTION == true )
+#if ( EMBED_CXX_ENABLE_EXCEPTION == true ) && (! EMBED_FN_ENSURE_NO_THROW)
     throw bad_function_call();
 #else
     bad_function_call_handler();
@@ -393,7 +420,20 @@ namespace detail {
 #  endif
 # endif
 
-  /// @c FnFunctor
+  /**
+   * @c FnFunctor
+   * @note FnFunctor is trivial.
+   * 
+   * The well defined operation of reusing its storage space is to use
+   * placement new. After that, using M_access to obtain the address or reference
+   * (rather than the content) is also in accordance with the C++ standard.
+   * See https://eel.is/c++draft/basic.life#7
+   * 
+   * This EMBED_ALIAS serves only as an auxiliary function.
+   * It prevents the compiler from performing aggressive optimizations.
+   * Even if the EMBED_ALIAS does not exist, the reuse of the FnFunctor's
+   * memory and the subsequent use of M_access for access are well-defined.
+   */
   template <std::size_t BufSize>
   union EMBED_ALIAS FnFunctor
   {
@@ -421,11 +461,13 @@ namespace detail {
 
     // cooperate with M_manager in FnManager
     enum FunctorManagerOpCode {
-      OP_clone_functor,
-      OP_move_functor,
-      OP_destroy_functor,
+      OP_clone_functor,     // Clone the M_functor
+      OP_move_functor,      // Move the M_functor
+      OP_destroy_functor,   // Destroy the M_functor
 
 #if ( EMBED_FN_NEED_FAST_CALL == false )
+      // M_invoker is not a member of embed::Fn in this mode,
+      // so use OP_get_invoker to get it.
       OP_get_invoker,
 #endif
     };
@@ -839,7 +881,7 @@ namespace detail {
     constexpr static std::size_t M_max_align = alignof(FnBufType<BufSize>);
 
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
 
     static constexpr bool noThrowExcept =
       std::is_nothrow_copy_constructible<Functor>::value
@@ -868,7 +910,8 @@ namespace detail {
   private:
     /// @e M_create
     /// Q: Why not use Functor, but use the `Func`?
-    /// A: Because this is perfect forward, need compiler deduce `Func` instead of specify it.
+    /// A: Because this is Perfect Forwarding, so compiler need to
+    /// deduce the type of `Func`, rather than explicitly specifying it.
     template <typename Func>
     static void M_create(FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
@@ -993,7 +1036,7 @@ namespace detail {
   public:
 
     static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
-    noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
+    EMBED_FN_CASE_NOEXCEPT
     {
       return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
         std::forward<ArgsType>(args)...);
@@ -1015,7 +1058,7 @@ namespace detail {
     constexpr static std::size_t M_max_align = alignof(FnBufType<BufSize>);
 
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
 
     static constexpr bool noThrowExcept =
       std::is_nothrow_move_constructible<Functor>::value
@@ -1182,7 +1225,7 @@ namespace detail {
     template <typename Functor>
     using Callable = FnTraits::Callable<RetType, Functor, ArgsType...>;
 
-    using Invoker_Type = RetType (*) (const detail::FnFunctor<BufSize>&, ArgsType&&...);
+    using Invoker_Type = RetType (*) (const detail::FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
 
     using Manager_Type = 
       Invoker_Type (*) (detail::FnFunctor<BufSize>&, const detail::FnFunctor<BufSize>&, FunctorManagerOpCode) EMBED_CXX17_NOEXCEPT;
@@ -1662,13 +1705,13 @@ namespace detail {
     }
 
     // check if the embed::Fn is empty.
-    EMBED_INLINE bool is_empty() const noexcept
+    EMBED_INLINE constexpr bool is_empty() const noexcept
     {
       return static_cast<bool>( M_manager == nullptr );
     }
 
     // `true` if the embed::Fn is not empty.
-    EMBED_INLINE explicit operator bool() const noexcept
+    EMBED_INLINE constexpr explicit operator bool() const noexcept
     {
       return !is_empty();
     }
@@ -1679,25 +1722,25 @@ namespace detail {
 
   // `true` if the wrapper has no target, `false` otherwise. (noexcept)
   template <typename Signature, std::size_t BufSize>
-  static inline bool
+  static EMBED_INLINE constexpr bool
   operator==(const Fn<Signature, BufSize>& fn, std::nullptr_t) noexcept
   { return fn.is_empty(); }
 
   // `true` if the wrapper has no target, `false` otherwise. (noexcept)
   template <typename Signature, std::size_t BufSize>
-  static inline bool
+  static EMBED_INLINE constexpr bool
   operator==(std::nullptr_t, const Fn<Signature, BufSize>& fn) noexcept
   { return fn.is_empty(); }
 
   // `true` if the wrapper does have target, `false` otherwise. (noexcept)
   template <typename Signature, std::size_t BufSize>
-  static inline bool
+  static EMBED_INLINE constexpr bool
   operator!=(const Fn<Signature, BufSize>& fn, std::nullptr_t) noexcept
   { return !fn.is_empty(); }
 
   // `true` if the wrapper does have target, `false` otherwise. (noexcept)
   template <typename Signature, std::size_t BufSize>
-  static inline bool
+  static EMBED_INLINE constexpr bool
   operator!=(std::nullptr_t, const Fn<Signature, BufSize>& fn) noexcept
   { return !fn.is_empty(); }
 
@@ -1874,6 +1917,7 @@ namespace detail {
 
 #if defined(EMBED_NO_STD_HEADER)
 # undef std
+EMBED_POP_STD
 #endif
 
 // std::swap
@@ -1892,6 +1936,7 @@ namespace std EMBED_ABI_VISIBILITY(default)
 #undef EMBED_FN_NEED_FAST_CALL
 #undef EMBED_FN_NOTHROW_CALLABLE
 #undef EMBED_FN_CASE_NOEXCEPT
+#undef EMBED_FN_ENSURE_NO_THROW
 
 #if defined(_MSC_VER)
 # pragma warning(pop)

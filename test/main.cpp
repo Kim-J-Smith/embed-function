@@ -6,6 +6,7 @@ TEST_SUBSYS_DECLARE(CreateInstanceFromMemberFunction, main);
 TEST_SUBSYS_DECLARE(CreateInstanceFromFunctor, main);
 TEST_SUBSYS_DECLARE(AssignTest, main);
 TEST_SUBSYS_DECLARE(SizeAndTraitsTest, main);
+TEST_SUBSYS_DECLARE(InvokeTest, main);
 
 int main()
 {
@@ -16,6 +17,7 @@ int main()
     TEST_RUN_SUBSYS(CreateInstanceFromFunctor, main);
     TEST_RUN_SUBSYS(AssignTest, main);
     TEST_RUN_SUBSYS(SizeAndTraitsTest, main);
+    TEST_RUN_SUBSYS(InvokeTest, main);
 
     return 0;
 }

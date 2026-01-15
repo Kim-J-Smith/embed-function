@@ -1,6 +1,5 @@
 #include "embed/embed_function.hpp"
 #include "test.hpp"
-#include <type_traits>
 
 TEST_FUNCTION_DECLARE(SizeAndTraitsTest, LayoutMatch);
 TEST_FUNCTION_DECLARE(SizeAndTraitsTest, NoThrowDefaultConstructibleTest);
@@ -34,12 +33,12 @@ TEST(SizeAndTraitsTest, NoThrowDefaultConstructibleTest) {
     using fn2_t = embed::function<void(int)>;
     using fn3_t = embed::function<void(int, double)>;
     using fn4_t = embed::function<char(int, double)>;
-
+#if !defined(EMBED_NO_STD_HEADER)
     ASSERT_EQ(std::is_nothrow_default_constructible<fn1_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_default_constructible<fn2_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_default_constructible<fn3_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_default_constructible<fn4_t>::value, true, "%d");
-
+#endif
     return 0;
 }
 
@@ -48,12 +47,12 @@ TEST(SizeAndTraitsTest, NoThrowCopyConstructibleTest) {
     using fn2_t = embed::function<void(int)>;
     using fn3_t = embed::function<void(int, double)>;
     using fn4_t = embed::function<char(int, double)>;
-
+#if !defined(EMBED_NO_STD_HEADER)
     ASSERT_EQ(std::is_nothrow_copy_constructible<fn1_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_copy_constructible<fn2_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_copy_constructible<fn3_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_copy_constructible<fn4_t>::value, true, "%d");
-
+#endif
     return 0;
 }
 
@@ -62,12 +61,12 @@ TEST(SizeAndTraitsTest, NoThrowMoveConstructibleTest) {
     using fn2_t = embed::function<void(int)>;
     using fn3_t = embed::function<void(int, double)>;
     using fn4_t = embed::function<char(int, double)>;
-
+#if !defined(EMBED_NO_STD_HEADER)
     ASSERT_EQ(std::is_nothrow_move_constructible<fn1_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_move_constructible<fn2_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_move_constructible<fn3_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_move_constructible<fn4_t>::value, true, "%d");
-
+#endif
     return 0;
 }
 

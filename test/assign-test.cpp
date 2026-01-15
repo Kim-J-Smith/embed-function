@@ -1,6 +1,5 @@
 #include "embed/embed_function.hpp"
 #include "test.hpp"
-#include <utility>
 
 TEST_FUNCTION_DECLARE(AssignTest, Copy_Assignment);
 TEST_FUNCTION_DECLARE(AssignTest, Move_Assignment);
@@ -53,6 +52,7 @@ struct testUse__MoveOnlyClass_
 };
 
 TEST(AssignTest, Move_Assignment) {
+#if !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
     embed::function<int(int)> fn1 = test_assign_free_func;
     embed::function<int(int)> fn2;
 
@@ -68,7 +68,7 @@ TEST(AssignTest, Move_Assignment) {
     ASSERT_EQ(static_cast<bool>(fn2), false, "%d");
     ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
     ASSERT_EQ(fn1(6), 12, "%d");
-
+#endif
     return 0;
 }
 
@@ -94,8 +94,11 @@ TEST(AssignTest, Similar_Assignment) {
     using fn_t = embed::function<void(), fn_similar_t::buffer_size + 1>;
 
     ASSERT_NE(fn_t::buffer_size, fn_similar_t::buffer_size, "%zu");
+
+#if !defined(EMBED_NO_STD_HEADER)
     ASSERT_EQ((std::is_constructible<fn_t, fn_similar_t>::value), true, "%d");
     ASSERT_EQ((std::is_assignable<fn_t, fn_similar_t>::value), true, "%d");
+#endif
 
     return 0;
 }
