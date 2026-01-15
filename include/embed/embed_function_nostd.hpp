@@ -41,6 +41,15 @@
 # endif
 #endif
 
+/// @c EMBED_CXX17_NODISCARD
+#ifndef EMBED_CXX17_NODISCARD
+# if EMBED_CXX_VERSION >= 201703L
+#  define EMBED_CXX17_NODISCARD [[nodiscard]]
+# else
+#  define EMBED_CXX17_NODISCARD
+# endif
+#endif
+
 /// @c EMBED_NORETURN
 #ifndef EMBED_NORETURN
 # if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
@@ -572,11 +581,15 @@ namespace embed { namespace detail { namespace fn_no_std {
 
 } } } // end namespace embed::detail::fn_no_std
 
-EMBED_NODISCARD void* 
-operator new(decltype(sizeof(int)), void* __p) noexcept;
+EMBED_CXX17_NODISCARD inline void* 
+operator new(decltype(sizeof(int)), void* __p) noexcept {
+  return __p;
+}
 
-EMBED_NODISCARD void* 
-operator new[](decltype(sizeof(int)), void* __p) noexcept;
+EMBED_CXX17_NODISCARD inline void* 
+operator new[](decltype(sizeof(int)), void* __p) noexcept {
+  return __p;
+}
 
 #endif // EMBED_FUNCTION_NOSTD_HPP__
 
