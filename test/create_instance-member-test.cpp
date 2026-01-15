@@ -3,7 +3,10 @@
  */
 #include "embed/embed_function.hpp"
 #include "test.hpp"
+
+#if !defined(EMBED_NO_STD_HEADER)
 #include <string>
+#endif
 
 // Declare member function test functions
 TEST_FUNCTION_DECLARE(CreateInstanceFromMemberFunction, NonStatic_MemberFunc);
@@ -28,9 +31,11 @@ public:
     static int static_func() { return 5678; }
     int const_func() const noexcept { return 9012; }
     int volatile_func() volatile { return 3456; }
+#if !defined(EMBED_NO_STD_HEADER)
     std::string arg_func(const std::string& str, int num) {
         return str + std::to_string(num);
     }
+#endif
 };
 
 // Non-static Member Function test
@@ -88,6 +93,7 @@ TEST(CreateInstanceFromMemberFunction, Volatile_MemberFunc) {
 
 // Member Function with Args test
 TEST(CreateInstanceFromMemberFunction, MemberFunc_WithArgs) {
+#if !defined(EMBED_NO_STD_HEADER)
     TestClass obj;
     auto fn1 = embed::make_function(&TestClass::arg_func);
     auto fn2 = embed::make_function(
@@ -99,5 +105,6 @@ TEST(CreateInstanceFromMemberFunction, MemberFunc_WithArgs) {
 
     ASSERT_EQ_STR(fn1(obj, "test_", 9527).c_str(), "test_9527");
     ASSERT_EQ_STR(fn2("test_", 9528).c_str(), "test_9528");
+#endif
     return 0;
 }

@@ -43,6 +43,7 @@ TEST(CreateInstanceFromFunctor, Copyable) {
 }
 
 TEST(CreateInstanceFromFunctor, NonCopyable) {
+#if !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
     embed::function<int(int)> fn1 = testUse__NonCopyableObject();
     embed::function<int(int)> fn2 = testUse__NonCopyableObject{};
     auto fn3 = embed::make_function(testUse__NonCopyableObject());
@@ -67,6 +68,6 @@ TEST(CreateInstanceFromFunctor, NonCopyable) {
     std::swap(fn1, fn3);
     ASSERT_EQ(static_cast<bool>(fn1), false, "%d");
     ASSERT_EQ(static_cast<bool>(fn3), true, "%d");
-
+#endif
     return 0;
 }

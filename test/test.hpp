@@ -6,6 +6,13 @@
 #include <stdint.h>
 #include <string.h>
 
+#if defined(EMBED_NO_STD_HEADER)
+# include "embed/embed_function.hpp"
+namespace std {
+  using namespace embed::detail::fn_no_std;
+}
+#endif
+
 ////////////////////////////////////////////////////////////////
 
 #define MESSAGE(msg) printf(__FILE__ "(" TEST_STR(__LINE__) "): " msg "\n")
@@ -109,6 +116,28 @@
     MESSAGE_FAIL("%s", "Assert - Fail");\
     return 5;\
   } while(0)
+
+
+class testUse__Base {
+public:
+  int member_var = 100;
+};
+
+class testUse__Base1 : virtual public testUse__Base {
+public:
+  virtual void foo() = 0;
+  virtual int foo(int a) = 0;
+  virtual float foo(float f) { return 3.14f + f; }
+  virtual ~testUse__Base1() = default;
+};
+
+class testUse__Base2 : virtual public testUse__Base {
+public:
+  virtual void bar() const noexcept {};
+  virtual int bar(int a) const noexcept { return a; }
+  virtual float bar(float f) const noexcept { return 3.14f + f; }
+  virtual ~testUse__Base2() = default;
+};
 
 #endif // TEST_HPP___
 
