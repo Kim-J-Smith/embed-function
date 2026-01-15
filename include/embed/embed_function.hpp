@@ -104,7 +104,7 @@ SOFTWARE.
 
 #if defined(_MSC_VER)
 # pragma warning(push)
-# pragma warning(disable: 4514 4668 4005 4710)
+# pragma warning(disable: 4514 4668 4005 4710 4371)
 #endif
 ////////////////////////////////////////////////////////////////
 

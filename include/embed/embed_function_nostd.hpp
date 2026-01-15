@@ -50,6 +50,15 @@
 # endif
 #endif
 
+/// @c EMBED_PLACEMENT_NEW_CONSTEXPR
+#ifndef EMBED_PLACEMENT_NEW_CONSTEXPR
+# if __cpp_lib_constexpr_new < 202406L
+#  define EMBED_PLACEMENT_NEW_CONSTEXPR inline
+# else
+#  define EMBED_PLACEMENT_NEW_CONSTEXPR constexpr
+# endif
+#endif
+
 /// @c EMBED_NORETURN
 #ifndef EMBED_NORETURN
 # if defined(__GNUC__) || defined(__clang__) || defined(__TI_COMPILER_VERSION__)
@@ -59,6 +68,12 @@
 # else
 #  define EMBED_NORETURN
 # endif
+#endif
+
+#if defined(_MSC_VER) && (EMBED_CXX_VERSION >= 202302L)
+extern "C" EMBED_NORETURN __declspec(dllimport) void abort(void);
+#else
+extern "C" EMBED_NORETURN void abort(void);
 #endif
 
 namespace embed { namespace detail { namespace fn_no_std {
@@ -85,7 +100,6 @@ namespace embed { namespace detail { namespace fn_no_std {
 # pragma GCC diagnostic ignored "-Wunused-function"
 #endif
   // std::terminate
-  extern "C" EMBED_NORETURN void abort();
   [[noreturn]] static EMBED_INLINE void terminate() { abort(); };
 #if defined(__GNUC__) || defined(__clang__)
 # pragma GCC diagnostic pop
@@ -581,15 +595,23 @@ namespace embed { namespace detail { namespace fn_no_std {
 
 } } } // end namespace embed::detail::fn_no_std
 
-EMBED_CXX17_NODISCARD inline void* 
+#if !(defined(_MSC_VER) && EMBED_CXX_VERSION >= 202002L)
+EMBED_CXX17_NODISCARD EMBED_PLACEMENT_NEW_CONSTEXPR void* 
 operator new(decltype(sizeof(int)), void* __p) noexcept {
   return __p;
 }
 
-EMBED_CXX17_NODISCARD inline void* 
+EMBED_CXX17_NODISCARD EMBED_PLACEMENT_NEW_CONSTEXPR void* 
 operator new[](decltype(sizeof(int)), void* __p) noexcept {
   return __p;
 }
+#else
+EMBED_CXX17_NODISCARD EMBED_PLACEMENT_NEW_CONSTEXPR void* 
+operator new(decltype(sizeof(int)), void* __p) noexcept;
+
+EMBED_CXX17_NODISCARD EMBED_PLACEMENT_NEW_CONSTEXPR void* 
+operator new[](decltype(sizeof(int)), void* __p) noexcept;
+#endif
 
 #endif // EMBED_FUNCTION_NOSTD_HPP__
 
