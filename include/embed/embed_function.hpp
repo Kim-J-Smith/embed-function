@@ -117,7 +117,7 @@ SOFTWARE.
  * `embed::function` uses an extra pointer-sized RAM (In the fast mode,
  * it occupies a total of two pointer sizes plus the buffer size of RAM space).
  */
-#define EMBED_FN_NEED_FAST_CALL     true
+#define EMBED_FN_NEED_FAST_CALL     false
 
 // assert nothrow callable function
 #define EMBED_FN_NOTHROW_CALLABLE   false
