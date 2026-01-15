@@ -300,7 +300,8 @@ SOFTWARE.
 #  define std detail::fn_no_std
 # endif
 #else
-# error embed_func need C++11 or greater version, try use '-std=c++11'.
+# error The embed-function requires the support of syntax features of C++11.\
+ You can use the -std=c++11 compilation option, or simply switch to a newer compiler.
 #endif
 
 ////////////////////////////////////////////////////////////////
