@@ -1,6 +1,6 @@
 # embed-function
 
-![Version - 1.1.0rc](https://img.shields.io/badge/Version-1.1.0rc-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
+![Version - 1.1.0](https://img.shields.io/badge/Version-1.1.0-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
 
 ![gcc-c++11/14/17/20/23 - passing](https://img.shields.io/badge/GCC_C++11/14/17/20/23-passing-3215911?style=flat) ![clang-c++11/14/17/20/23 - passing](https://img.shields.io/badge/Clang_C++11/14/17/20/23-passing-3215911?style=flat) ![msvc-c++14/17/20/23 - passing](https://img.shields.io/badge/MSVC_C++14/17/20/23-passing-3215911?style=flat)
 
@@ -18,6 +18,10 @@
 - ✅ **No dynamic memory allocation**
 
   Never heap alloc. Ensure the real-time performance of the code.
+
+- ✅ **Adjustable buffer size**
+
+  Users can specify the buffer size used by each embed::function instance, which is used to wrap callable objects of different sizes.
 
 - ✅ **Extremely minimal memory usage**
 
@@ -54,6 +58,9 @@ struct Example {
 int main() 
 {
     Example e;
+
+    // The type of fn is embed::Fn<void(int), sizeof(void*)>.
+    // And embed::function is the alias type of embed::Fn.
     embed::function<void(int)> fn;
 
     fn = [&e](int p) { e.memberFkn(p); };
