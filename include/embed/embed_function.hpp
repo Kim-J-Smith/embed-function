@@ -119,7 +119,7 @@ SOFTWARE.
  */
 #define EMBED_FN_NEED_FAST_CALL     false
 
-// assert nothrow callable function
+// Assert that the wrapped callable object does not throw exceptions.
 #define EMBED_FN_NOTHROW_CALLABLE   false
 
 // Ensure that no `bad_function_call` exception is thrown if true.
@@ -677,6 +677,7 @@ namespace detail {
     };
 
     /// @e arguments_are_same_impl
+    /// @brief check if arguments are all same.
     template <typename ArgsPackageFrom, typename ArgsPackageTo, std::size_t Idx>
     struct arguments_are_same_impl
     {
@@ -732,6 +733,8 @@ namespace detail {
     }
 
     /// @e is_similar_Fn
+    /// @brief check if two Fn are similar.
+    /// "Similar" means the function signature is the same, but may have different buffer size.
     template <
       typename SelfRet, typename SelfArgs_package, std::size_t SelfArgNum, std::size_t SelfBuf,
       typename OtherRet, typename OtherArgs_package, std::size_t OtherArgNum, std::size_t OtherBuf>
