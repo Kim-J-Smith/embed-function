@@ -716,7 +716,8 @@ namespace detail {
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<!std::is_void<RetType>::value, RetType>::type
     invoke_r(Callee&& fn, ArgsType&&... args)
-      noexcept(noexcept(static_cast<Callee&&>(fn)(static_cast<ArgsType&&>(args)...)))
+      noexcept(noexcept(std::forward<Callee>(fn)(std::forward<ArgsType>(args)...))
+      && Callable<RetType, Callee, ArgsType...>::NoThrow_conv::value)
     {
       // The return type is not `void`.
       return std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
@@ -726,7 +727,7 @@ namespace detail {
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<std::is_void<RetType>::value>::type
     invoke_r(Callee&& fn, ArgsType&&... args)
-      noexcept(noexcept(static_cast<Callee&&>(fn)(static_cast<ArgsType&&>(args)...)))
+      noexcept(noexcept(std::forward<Callee>(fn)(std::forward<ArgsType>(args)...)))
     {
       // The return type is `void`.
       std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
