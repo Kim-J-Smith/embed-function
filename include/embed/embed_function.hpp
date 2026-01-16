@@ -226,9 +226,9 @@ SOFTWARE.
 
 /// @c EMBED_INLINE
 #ifndef EMBED_INLINE
-# if defined(__GNUC__) || defined(__clang__)
-#  define EMBED_INLINE __attribute__((always_inline)) inline
-# elif defined(_MSC_VER)
+# if defined(__GNUC__) || defined(__clang__) || defined(__TASKING__)
+#  define EMBED_INLINE inline __attribute__((always_inline))
+# elif defined(_MSC_VER) || defined(__IAR_SYSTEMS_ICC__)
 #  define EMBED_INLINE __forceinline
 # else
 #  define EMBED_INLINE inline
