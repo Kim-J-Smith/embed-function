@@ -401,7 +401,7 @@ namespace detail {
     const void* cvPtr;
     void (* fPtr) ();
 
-    static_assert(BufSize > 0, "embed::Fn require the BufSize greater than 0");
+    static_assert(BufSize > 0, "embed::Fn requires the BufSize greater than 0");
     char        buf[BufSize];
   };
 
@@ -1374,7 +1374,7 @@ namespace detail {
     Fn(Functor&& func) noexcept
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require the Functor is callable and the Signature match RetType");
+        "embed::Fn requires the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
         "embed::Fn target must be copy-constructible");
@@ -1411,7 +1411,7 @@ namespace detail {
     Fn(Functor&& func)
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require the Functor is callable and the Signature match RetType");
+        "embed::Fn requires the Functor is callable and the Signature match RetType");
 
       if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
       {
@@ -1547,7 +1547,7 @@ namespace detail {
     Fn(Functor&& func) noexcept
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require the Functor is callable and the Signature match RetType");
+        "embed::Fn requires the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
         "embed::Fn target must be copy-constructible");
@@ -1582,7 +1582,7 @@ namespace detail {
     Fn(Functor&& func)
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require the Functor is callable and the Signature match RetType");
+        "embed::Fn requires the Functor is callable and the Signature match RetType");
 
       if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
       {
