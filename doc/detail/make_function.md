@@ -28,6 +28,9 @@ struct Example {
     void operator()(int) {};
 };
 
+void example_overload_func(void) {}
+int example_overload_func(int) {}
+
 int main()
 {
     Example e;
@@ -46,6 +49,14 @@ int main()
 
     // The type of `fn5` is embed::function<void(const Example&,double)>
     auto fn5 = embed::make_function(&Example::memberFkn_const);
+
+    // The type of `fn6` is embed::function<void()>
+    auto fn6 = embed::make_function(static_cast<void(*)()>(
+        example_overload_func));
+
+    // The type of `fn7` is embed::function<int(int)>
+    auto fn7 = embed::make_function(static_cast<int(*)(int)>(
+        example_overload_func));
 
     return 0;
 }

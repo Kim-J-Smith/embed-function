@@ -2,7 +2,7 @@
 
 ![Version - 1.1.0](https://img.shields.io/badge/Version-1.1.0-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
 
-![gcc-c++11/14/17/20/23 - passing](https://img.shields.io/badge/GCC_C++11/14/17/20/23-passing-3215911?style=flat) ![clang-c++11/14/17/20/23 - passing](https://img.shields.io/badge/Clang_C++11/14/17/20/23-passing-3215911?style=flat) ![msvc-c++14/17/20/23 - passing](https://img.shields.io/badge/MSVC_C++14/17/20/23-passing-3215911?style=flat)
+![gcc-c++11/14/17/20/23 - passing](https://img.shields.io/badge/GCC_C++11/14/17/20/23-passing-brightgreen?style=flat) ![clang-c++11/14/17/20/23 - passing](https://img.shields.io/badge/Clang_C++11/14/17/20/23-passing-brightgreen?style=flat) ![msvc-c++14/17/20/23 - passing](https://img.shields.io/badge/MSVC_C++14/17/20/23-passing-brightgreen?style=flat)
 
 
 *Embedded friendly `std::function` alternative. The usage method is consistent with `std::function`.*
@@ -17,15 +17,17 @@
 
 - ✅ **No dynamic memory allocation**
 
-  Never heap alloc. Ensure the real-time performance of the code.
+  Never allocates memory on the heap. Ensure the real-time performance of the code.
 
 - ✅ **Adjustable buffer size**
 
   Users can specify the buffer size used by each embed::function instance, which is used to wrap callable objects of different sizes.
 
+  The default value of buffer size `FnDefaultBufSize` is defined at the beginning of the embed_function.hpp header file, and it is set to the size of one pointer. Users can customize this value.
+
 - ✅ **Extremely minimal memory usage**
 
-  By default, it occupies 2 pointer-sized amounts of RAM.
+  By default, it occupies 2 pointer-sized(manager + buffer) amounts of RAM.
 
   If you need to package larger callable objects, you can manually adjust the buffer size of the `embed::function<Signature, BufSize>`.
 
@@ -33,9 +35,13 @@
 
   The `embed::function` itself supports both enabling and disabling of exceptions, but it is more recommended to use it in the mode where exceptions are disabled.
 
+  When exceptions are disabled, calling an empty `embed::function` instance by the user will invoke the `bad_function_call_handler` function for processing (by default, it simply terminates the program), and the logic of the `bad_function_call_handler` function is at the beginning of the embed_function.hpp file. Users can customize it.
+
 - ✅ **Support non-copyable objects**
 
   According to the C++ proposal [N4159](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4159.pdf), the `embed::function` class, in addition to supporting the basic functions of `std::function`, also adds support for non-copyable objects.
+
+  When a user attempts to perform a copy operation (copy constructor, copy assignment, etc) on an `embed::function` instance that is wrapped with an uncopyable type, the program will call the `bad_function_copy_handler` function (which defaults to terminating the program). The `bad_function_copy_handler` function is located at the beginning of embed_function.hpp and is customizable.
 
 ---
 
@@ -59,9 +65,9 @@ int main()
 {
     Example e;
 
-    // The type of fn is embed::Fn<void(int), sizeof(void*)>.
-    // And embed::function is the alias type of embed::Fn.
-    embed::function<void(int)> fn;
+    // Here, the second template parameter can be omitted.
+    // Same as: embed::function<void(int)> fn;
+    embed::function<void(int), sizeof(void*)> fn;
 
     fn = [&e](int p) { e.memberFkn(p); };
     fn(123);
@@ -89,14 +95,22 @@ int main()
     - Member function. (should be wrapped by lambda function)
 
   - Be usable with C++11 while offering more functionality for later editions.
-    - C++11 offer most functionality.
+    - C++11 provides most of the functionality.
     - C++17 introduces a template type deduction guide, allowing users to use the underlying type `embed::Fn` (where `embed::function` is an alias for `embed::Fn`) without having to specify the template parameters.
 
   - Be constexpr and exception friendly. As much as possible should be declared constexpr and noexcept.
 
 ## Detail APIs
 
-[Click here to view the detailed APIs](doc/API_embed_function.md)
+  [Click here to view the detailed APIs](doc/API_embed_function.md)
+
+## Solution without the C++ standard library
+
+  In some embedded situations, the compiler may not support the standard libraries of C++, such as &lt;type_traits&gt;, &lt;new&gt;, and so on. Therefore, we provide [`embed_function_nostd.hpp`](./include/embed/embed_function_nostd.hpp) as a solution. This file implements all the standard library contents required by this project. Users only need to define the macro **`EMBED_NO_STD_HEADER`** during compilation to enable it.
+
+## Tests
+
+  The test cases have been provided in the [test](./test/) directory. Refer to the commands in the [test/ReadMe](./test/ReadMe.md) file for testing.
 
 ## License
 
