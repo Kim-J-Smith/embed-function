@@ -521,11 +521,201 @@ namespace detail {
     template <typename T> struct make_void { using type = void; };
     template <typename T> using void_t = typename make_void<T>::type;
 
-    template <typename Func, typename... ArgsT>
-    struct invoke_result
+    /// @e remove_cvref_t for C++11
+    template <typename T>
+    using remove_cvref_t = typename std::remove_cv<
+      typename std::remove_reference<T>::type
+    >::type;
+
+    /// @brief trigger the SFINAE
+    class failure_type {};
+
+    /// @brief The call tag. Used by `invoke_result` and `invoke_impl`.
+    // free_func, static_memfunc, lambda, std::reference_wrapper<R Class::*>, ...
+    class invoke_tag__normal {};
+
+    // Class&, std::reference_wrapper<Class>, ...
+    class invoke_tag__memfn_ref_like {};
+    // Class*, std::unique_ptr<Class>, std::reference_wrapper<Class*>, ...
+    class invoke_tag__memfn_pointer_like {};
+
+    // Class&, std::reference_wrapper<Class>, ...
+    class invoke_tag__memobj_ref_like {};
+    // Class*, std::unique_ptr<Class>, std::reference_wrapper<Class*>, ...
+    class invoke_tag__memobj_pointer_like {};
+
+    /// @e inv_unwrap
+    template <typename T, typename U = remove_cvref_t<T>>
+    struct inv_unwrap { using type = T; };
+
+    template <typename T, typename RealType>
+    struct inv_unwrap<T, std::reference_wrapper<RealType>>
+    { using type = RealType&; };
+
+    template <typename T>
+    using inv_unwrap_t = typename inv_unwrap<T>::type;
+
+    /// @brief bind T and tag
+    template <typename T, typename Tag>
+    struct type_and_tag_wrapper
     {
-      using type = decltype(std::declval<Func>() (std::declval<ArgsT>()...));
+      using type = T;
+      using tag = Tag;
     };
+
+    template <typename MemObj, typename Arg>
+    struct invoke_result_of_memobj_ref_like_helper
+    {
+      static failure_type S_test(...) { return {}; }
+      static type_and_tag_wrapper<
+        /* type = */ decltype(std::declval<Arg>().*std::declval<MemObj>()),
+        /* tag = */ invoke_tag__memobj_ref_like
+      > S_test(int) { return {}; }
+
+      using type = decltype(S_test(0));
+    };
+
+    template <typename MemObj, typename Arg>
+    struct invoke_result_of_memobj_pointer_like_helper
+    {
+      static failure_type S_test(...) { return {}; }
+      static type_and_tag_wrapper<
+        /* type = */ decltype((*std::declval<Arg>()).*std::declval<MemObj>()),
+        /* tag = */ invoke_tag__memobj_pointer_like
+      > S_test(int) { return {}; }
+
+      using type = decltype(S_test(0));
+    };
+
+    /// @e invoke_result_of_memobj
+    template <typename T, typename U>
+    struct invoke_result_of_memobj;  // Undefined
+
+    template <typename Class, typename RetT, typename Arg>
+    struct invoke_result_of_memobj<RetT Class::*, Arg>
+    {
+      using MemberObj = RetT Class::*;
+      using ThisClass = remove_cvref_t<Arg>;
+
+      using type = typename std::conditional<
+        (std::is_same<Class, ThisClass>::value || std::is_base_of<Class, ThisClass>::value),
+        typename invoke_result_of_memobj_ref_like_helper<MemberObj, Arg>::type,
+        typename invoke_result_of_memobj_pointer_like_helper<MemberObj, Arg>::type
+      >::type;
+    };
+
+    template <typename MemFunc, typename Arg, typename... ArgsType>
+    struct invoke_result_of_memfunc_ref_like_helper
+    {
+      static failure_type S_test(...) { return {}; }
+      static type_and_tag_wrapper<
+        /* type = */ decltype((std::declval<Arg>().*std::declval<MemFunc>())(
+          std::declval<ArgsType>()...
+        )),
+        /* tag = */ invoke_tag__memfn_ref_like
+      > S_test(int) { return {}; }
+
+      using type = decltype(S_test(0));
+    };
+
+    template <typename MemFunc, typename Arg, typename... ArgsType>
+    struct invoke_result_of_memfunc_pointer_like_helper
+    {
+      static failure_type S_test(...) { return {}; }
+      static type_and_tag_wrapper<
+        /* type = */ decltype(((*std::declval<Arg>()).*std::declval<MemFunc>())(
+          std::declval<ArgsType>()...
+        )),
+        /* tag = */ invoke_tag__memfn_pointer_like
+      > S_test(int) { return {}; }
+
+      using type = decltype(S_test(0));
+    };
+
+    /// @e invoke_result_of_memfunc
+    template <typename... T>
+    struct invoke_result_of_memfunc;  // Undefined
+
+    template <typename Class, typename RetT, typename Arg, typename... ArgsType>
+    struct invoke_result_of_memfunc<RetT Class::*, Arg, ArgsType...>
+    {
+      using MemberFunc = RetT Class::*;
+      using ThisClass = remove_cvref_t<Arg>;
+
+      using type = typename std::conditional<
+        (std::is_same<Class, ThisClass>::value || std::is_base_of<Class, ThisClass>::value),
+        typename invoke_result_of_memfunc_ref_like_helper<MemberFunc, Arg>::type,
+        typename invoke_result_of_memfunc_pointer_like_helper<MemberFunc, Arg>::type
+      >::type;
+    };
+
+    /// @e invoke_result_of_normal
+    template <typename Functor, typename... ArgsType>
+    struct invoke_result_of_normal
+    {
+      static failure_type S_test(...) { return {}; }
+      static type_and_tag_wrapper<
+        /* type = */ decltype(std::declval<Functor>()(
+          std::declval<ArgsType>()...)),
+        /* tag = */ invoke_tag__normal
+      > S_test(int) { return {}; }
+
+      using type = decltype(S_test(0));
+    };
+
+    /// @e invoke_result_impl
+    template <bool, bool, typename Functor, typename... ArgsType>
+    struct invoke_result_impl
+    {
+      using type = failure_type;  // failure_type::type will trigger SFINAE
+    };
+
+    template <typename PointerToMemObj, typename Arg>
+    struct invoke_result_impl<
+      /* is_memfunc_ptr = */ false,
+      /* is_memobj_ptr = */ true,
+      PointerToMemObj, Arg
+    > {
+      using type = typename invoke_result_of_memobj<
+        typename std::decay<PointerToMemObj>::type,
+        inv_unwrap_t<Arg>
+      >::type;
+    }; // member data
+
+    template <typename PointerToMemFunc, typename Arg, typename... ArgsType>
+    struct invoke_result_impl<
+      /* is_memfunc_ptr = */ true,
+      /* is_memobj_ptr = */ false,
+      PointerToMemFunc, Arg, ArgsType...
+    > {
+      using type = typename invoke_result_of_memfunc<
+        typename std::decay<PointerToMemFunc>::type,
+        inv_unwrap_t<Arg>, ArgsType...
+      >::type;
+    }; // member function
+
+    template <typename NormalFunc, typename... ArgsType>
+    struct invoke_result_impl<
+      /* is_memfunc_ptr = */ false,
+      /* is_memobj_ptr = */ false,
+      NormalFunc, ArgsType...
+    > {
+      using type = typename invoke_result_of_normal<
+        NormalFunc, ArgsType...
+      >::type;
+    }; // normal function
+
+    /// @brief Get the invoke result and invoke tag. Same as std::invoke_result.
+    template <typename Func, typename... ArgsT>
+    struct invoke_result : public invoke_result_impl<
+      std::is_member_function_pointer<
+        typename std::remove_reference<Func>::type
+      >::value,  // first -> is_member_func
+      std::is_member_object_pointer<
+        typename std::remove_reference<Func>::type
+      >::value,  // second -> is_member_obj
+      Func, ArgsT...
+    >::type {};
 
     template <typename To, typename From>
     struct reference_converts_from_temporary
