@@ -720,9 +720,7 @@ namespace detail {
     template <typename To, typename From>
     struct reference_converts_from_temporary
     {
-      using no_cvref_To = typename std::remove_cv<
-        typename std::remove_reference<To>::type
-      >::type;
+      using no_cvref_To = remove_cvref_t<To>;
 
       // prvalue(pure right value) is being bound to const lvalue(left value)
       static constexpr bool pr_to_l = std::is_lvalue_reference<To>::value
@@ -1039,9 +1037,7 @@ namespace detail {
     template <typename Functor>
     struct is_movable_and_non_copyable
     {
-      using Func = typename std::remove_cv<
-        typename std::remove_reference<Functor>::type
-      >::type;
+      using Func = remove_cvref_t<Functor>;
       static constexpr bool value = std::is_move_constructible<Func>::value
         && !std::is_copy_constructible<Func>::value;
     };
@@ -1397,11 +1393,7 @@ namespace detail {
   private:
     template <typename Functor>
     using DecayFunc_t = typename std::enable_if<
-      !std::is_same<Fn,
-        typename std::remove_cv<
-          typename std::remove_reference<Functor>::type
-        >::type
-      >::value,
+      !std::is_same<Fn, FnTraits::remove_cvref_t<Functor> >::value,
       typename std::decay<Functor>::type
     >::type;
 
