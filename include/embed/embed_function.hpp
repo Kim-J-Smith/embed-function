@@ -899,26 +899,87 @@ namespace detail {
       arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, ArgNum-1>
     >::type { };
 
+    /**
+     * @e invoke_impl
+     * @brief Distribute the call of normal function,
+     * member function and member object.
+     */
+    template <typename RetT, typename Func, typename... Args>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
+    invoke_impl(invoke_tag__normal, Func&& fn, Args&&... args)
+      noexcept(noexcept(std::forward<Func>(fn)(std::forward<Args>(args)...)))
+    { return std::forward<Func>(fn)(std::forward<Args>(args)...); }
+
+    template <typename RetT, typename MemObj, typename Arg>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
+    invoke_impl(invoke_tag__memobj_ref_like, MemObj&& obj, Arg&& arg)
+      noexcept(noexcept(static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemObj>(obj)))
+    { return static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemObj>(obj); }
+
+    template <typename RetT, typename MemObj, typename Arg>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
+    invoke_impl(invoke_tag__memobj_pointer_like, MemObj&& obj, Arg&& arg)
+      noexcept(noexcept((*std::forward<Arg>(arg)).*std::forward<MemObj>(obj)))
+    { return (*std::forward<Arg>(arg)).*std::forward<MemObj>(obj); }
+
+    template <typename RetT, typename MemFunc, typename Arg, typename... ArgsType>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
+    invoke_impl(invoke_tag__memfn_ref_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
+      noexcept(noexcept(
+        (static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemFunc>(memfn))(
+          std::forward<ArgsType>(args)...)))
+    {
+      return (static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemFunc>(memfn))(
+        std::forward<ArgsType>(args)...
+      );
+    }
+
+    template <typename RetT, typename MemFunc, typename Arg, typename... ArgsType>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
+    invoke_impl(invoke_tag__memfn_pointer_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
+      noexcept(noexcept(
+        ((*std::forward<Arg>(arg)).*std::forward<MemFunc>(memfn))(
+          std::forward<ArgsType>(args)...)))
+    {
+      return ((*std::forward<Arg>(arg)).*std::forward<MemFunc>(memfn))(
+        std::forward<ArgsType>(args)...
+      );
+    }
+
     /// @e invoke_r
     template <typename RetType, typename Callee, typename... ArgsType>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<!std::is_void<RetType>::value, RetType>::type
     invoke_r(Callee&& fn, ArgsType&&... args)
-      noexcept(noexcept(std::forward<Callee>(fn)(std::forward<ArgsType>(args)...))
+      noexcept(noexcept(
+        invoke_impl<typename invoke_result<Callee, ArgsType...>::type>(
+          typename invoke_result<Callee, ArgsType...>::tag{}, 
+          std::forward<Callee>(fn), std::forward<ArgsType>(args)...))
       && Callable<RetType, Callee, ArgsType...>::NoThrow_conv::value)
     {
       // The return type is not `void`.
-      return std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
+      using result  = invoke_result<Callee, ArgsType...>;
+      using type    = typename result::type;
+      using tag     = typename result::tag;
+
+      return invoke_impl<type>(tag{}, std::forward<Callee>(fn), std::forward<ArgsType>(args)...);
     }
 
     template <typename RetType, typename Callee, typename... ArgsType>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<std::is_void<RetType>::value>::type
     invoke_r(Callee&& fn, ArgsType&&... args)
-      noexcept(noexcept(std::forward<Callee>(fn)(std::forward<ArgsType>(args)...)))
+      noexcept(noexcept(
+        invoke_impl<typename invoke_result<Callee, ArgsType...>::type>(
+          typename invoke_result<Callee, ArgsType...>::tag{}, 
+          std::forward<Callee>(fn), std::forward<ArgsType>(args)...)))
     {
       // The return type is `void`.
-      std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
+      using result  = invoke_result<Callee, ArgsType...>;
+      using type    = typename result::type;
+      using tag     = typename result::tag;
+
+      invoke_impl<type>(tag{}, std::forward<Callee>(fn), std::forward<ArgsType>(args)...);
     }
 
     /// @e is_similar_Fn
