@@ -77,6 +77,11 @@ int main()
 
     fn = e;
     fn(789);
+
+    // The type of auto_fn is 
+    // embed::function<void(Example&,int), sizeof(&Example::memberFkn)>
+    auto auto_fn = embed::make_function(&Example::memberFkn);
+    auto_fn(e, 101112);
 }
 
 ```
