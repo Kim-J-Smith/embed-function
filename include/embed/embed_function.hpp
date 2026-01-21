@@ -566,25 +566,25 @@ namespace detail {
     template <typename MemObj, typename Arg>
     struct invoke_result_of_memobj_ref_like_helper
     {
-      static failure_type S_test(...) { return {}; }
-      static type_and_tag_wrapper<
-        /* type = */ decltype(std::declval<Arg>().*std::declval<MemObj>()),
+      template<typename> static failure_type S_test(...) { return {}; }
+      template<typename T> static type_and_tag_wrapper<
+        /* type = */ decltype(std::declval<T>().*std::declval<MemObj>()),
         /* tag = */ invoke_tag__memobj_ref_like
       > S_test(int) { return {}; }
 
-      using type = decltype(S_test(0));
+      using type = decltype(S_test<Arg>(0));
     };
 
     template <typename MemObj, typename Arg>
     struct invoke_result_of_memobj_pointer_like_helper
     {
-      static failure_type S_test(...) { return {}; }
-      static type_and_tag_wrapper<
-        /* type = */ decltype((*std::declval<Arg>()).*std::declval<MemObj>()),
+      template<typename> static failure_type S_test(...) { return {}; }
+      template<typename T> static type_and_tag_wrapper<
+        /* type = */ decltype((*std::declval<T>()).*std::declval<MemObj>()),
         /* tag = */ invoke_tag__memobj_pointer_like
       > S_test(int) { return {}; }
 
-      using type = decltype(S_test(0));
+      using type = decltype(S_test<Arg>(0));
     };
 
     /// @e invoke_result_of_memobj
@@ -601,35 +601,35 @@ namespace detail {
         (std::is_same<Class, ThisClass>::value || std::is_base_of<Class, ThisClass>::value),
         typename invoke_result_of_memobj_ref_like_helper<MemberObj, Arg>::type,
         typename invoke_result_of_memobj_pointer_like_helper<MemberObj, Arg>::type
-      >::type;
+      >::type::type;
     };
 
     template <typename MemFunc, typename Arg, typename... ArgsType>
     struct invoke_result_of_memfunc_ref_like_helper
     {
-      static failure_type S_test(...) { return {}; }
-      static type_and_tag_wrapper<
-        /* type = */ decltype((std::declval<Arg>().*std::declval<MemFunc>())(
+      template<typename> static failure_type S_test(...) { return {}; }
+      template<typename T> static type_and_tag_wrapper<
+        /* type = */ decltype((std::declval<T>().*std::declval<MemFunc>())(
           std::declval<ArgsType>()...
         )),
         /* tag = */ invoke_tag__memfn_ref_like
       > S_test(int) { return {}; }
 
-      using type = decltype(S_test(0));
+      using type = decltype(S_test<Arg>(0));
     };
 
     template <typename MemFunc, typename Arg, typename... ArgsType>
     struct invoke_result_of_memfunc_pointer_like_helper
     {
-      static failure_type S_test(...) { return {}; }
-      static type_and_tag_wrapper<
-        /* type = */ decltype(((*std::declval<Arg>()).*std::declval<MemFunc>())(
+      template<typename> static failure_type S_test(...) { return {}; }
+      template<typename T> static type_and_tag_wrapper<
+        /* type = */ decltype(((*std::declval<T>()).*std::declval<MemFunc>())(
           std::declval<ArgsType>()...
         )),
         /* tag = */ invoke_tag__memfn_pointer_like
       > S_test(int) { return {}; }
 
-      using type = decltype(S_test(0));
+      using type = decltype(S_test<Arg>(0));
     };
 
     /// @e invoke_result_of_memfunc
@@ -646,21 +646,21 @@ namespace detail {
         (std::is_same<Class, ThisClass>::value || std::is_base_of<Class, ThisClass>::value),
         typename invoke_result_of_memfunc_ref_like_helper<MemberFunc, Arg>::type,
         typename invoke_result_of_memfunc_pointer_like_helper<MemberFunc, Arg>::type
-      >::type;
+      >::type::type;
     };
 
     /// @e invoke_result_of_normal
     template <typename Functor, typename... ArgsType>
     struct invoke_result_of_normal
     {
-      static failure_type S_test(...) { return {}; }
-      static type_and_tag_wrapper<
-        /* type = */ decltype(std::declval<Functor>()(
+      template<typename> static failure_type S_test(...) { return {}; }
+      template<typename T> static type_and_tag_wrapper<
+        /* type = */ decltype(std::declval<T>()(
           std::declval<ArgsType>()...)),
         /* tag = */ invoke_tag__normal
       > S_test(int) { return {}; }
 
-      using type = decltype(S_test(0));
+      using type = decltype(S_test<Functor>(0));
     };
 
     /// @e invoke_result_impl
