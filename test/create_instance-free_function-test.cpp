@@ -294,10 +294,18 @@ TEST(CreateInstanceFromFreeFunction, Overloaded_Function) {
     embed::function<int(int)> fn_int = static_cast<int(*)(int)>(testUse__free_function_Overload);
     embed::function<float(float)> fn_float = static_cast<float(*)(float)>(testUse__free_function_Overload);
 
+    auto fn1 = embed::make_function(static_cast<int(&)(int)>(testUse__free_function_Overload));
+    auto fn2 = embed::make_function(static_cast<float(&)(float)>(testUse__free_function_Overload));
+
     ASSERT_EQ(static_cast<bool>(fn_int), true, "%d");
     ASSERT_EQ(static_cast<bool>(fn_float), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn2), true, "%d");
+
     ASSERT_EQ(fn_int(10), 10, "%d");
     ASSERT_EQ_F(fn_float(3.14f), 6.28f, 1e-6f);
+    ASSERT_EQ(fn1(11), 11, "%d");
+    ASSERT_EQ_F(fn2(3.15f), 6.30f, 1e-6f);
     return 0;
 }
 
@@ -307,6 +315,7 @@ TEST(CreateInstanceFromFreeFunction, Static_Function) {
 
     ASSERT_EQ(static_cast<bool>(fn), true, "%d");
     ASSERT_EQ(fn(5), 50, "%d");
+    ASSERT_EQ(fn(7), 70, "%d");
     return 0;
 }
 

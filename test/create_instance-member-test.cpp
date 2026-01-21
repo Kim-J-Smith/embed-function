@@ -14,6 +14,7 @@ TEST_FUNCTION_DECLARE(CreateInstanceFromMemberFunction, Static_MemberFunc);
 TEST_FUNCTION_DECLARE(CreateInstanceFromMemberFunction, Const_MemberFunc);
 TEST_FUNCTION_DECLARE(CreateInstanceFromMemberFunction, Volatile_MemberFunc);
 TEST_FUNCTION_DECLARE(CreateInstanceFromMemberFunction, MemberFunc_WithArgs);
+TEST_FUNCTION_DECLARE(CreateInstanceFromMemberFunction, FnDeduction);
 
 // Test subsys main entry
 TEST_SUBSYS(CreateInstanceFromMemberFunction, main) {
@@ -22,6 +23,7 @@ TEST_SUBSYS(CreateInstanceFromMemberFunction, main) {
     TEST_RUN(CreateInstanceFromMemberFunction, Const_MemberFunc);
     TEST_RUN(CreateInstanceFromMemberFunction, Volatile_MemberFunc);
     TEST_RUN(CreateInstanceFromMemberFunction, MemberFunc_WithArgs);
+    TEST_RUN(CreateInstanceFromMemberFunction, FnDeduction);
 }
 
 // Test class for member function tests
@@ -105,6 +107,29 @@ TEST(CreateInstanceFromMemberFunction, MemberFunc_WithArgs) {
 
     ASSERT_EQ_STR(fn1(obj, "test_", 9527).c_str(), "test_9527");
     ASSERT_EQ_STR(fn2("test_", 9528).c_str(), "test_9528");
+#endif
+    return 0;
+}
+
+TEST(CreateInstanceFromMemberFunction, FnDeduction) {
+#if ( __cpp_deduction_guides >= 201606 ) || ( EMBED_CXX_VERSION >= 201703L )
+    embed::Fn fn1 = &TestClass::const_func;
+    embed::Fn fn2 = &TestClass::non_static_func;
+    embed::Fn fn3 = &TestClass::static_func;
+    embed::Fn fn4 = &TestClass::volatile_func;
+
+    ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn2), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn3), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn4), true, "%d");
+
+    TestClass t;
+
+    ASSERT_EQ(fn1(t), 9012, "%d");
+    ASSERT_EQ(fn2(t), 1234, "%d");
+    ASSERT_EQ(fn3(), 5678, "%d");
+    ASSERT_EQ(fn4(t), 3456, "%d");
+
 #endif
     return 0;
 }

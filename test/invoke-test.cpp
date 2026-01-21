@@ -133,3 +133,8 @@ TEST(InvokeTest, VirtualMethodTest) {
     return 0;
 }
 
+
+/// TODO: test my::invoke_result
+/// TODO: test my::invoke_r
+/// TODO: change make_function logic of member function.
+
