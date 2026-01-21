@@ -70,7 +70,7 @@
 # endif
 #endif
 
-#if defined(_MSC_VER) && (EMBED_CXX_VERSION >= 202302L)
+#if defined(_MSC_VER)
 extern "C" EMBED_NORETURN __declspec(dllimport) void abort(void);
 #else
 extern "C" EMBED_NORETURN void abort(void);
@@ -644,7 +644,7 @@ namespace embed { namespace detail { namespace fn_no_std {
 
 } } } // end namespace embed::detail::fn_no_std
 
-#if !(defined(_MSC_VER) && EMBED_CXX_VERSION >= 202002L)
+#if 1
 EMBED_CXX17_NODISCARD EMBED_PLACEMENT_NEW_CONSTEXPR void* 
 operator new(decltype(sizeof(int)), void* __p) noexcept {
   return __p;
