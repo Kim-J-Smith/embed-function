@@ -601,7 +601,7 @@ namespace detail {
         (std::is_same<Class, ThisClass>::value || std::is_base_of<Class, ThisClass>::value),
         typename invoke_result_of_memobj_ref_like_helper<MemberObj, Arg>::type,
         typename invoke_result_of_memobj_pointer_like_helper<MemberObj, Arg>::type
-      >::type::type;
+      >::type;
     };
 
     template <typename MemFunc, typename Arg, typename... ArgsType>
@@ -644,9 +644,9 @@ namespace detail {
 
       using type = typename std::conditional<
         (std::is_same<Class, ThisClass>::value || std::is_base_of<Class, ThisClass>::value),
-        typename invoke_result_of_memfunc_ref_like_helper<MemberFunc, Arg>::type,
-        typename invoke_result_of_memfunc_pointer_like_helper<MemberFunc, Arg>::type
-      >::type::type;
+        typename invoke_result_of_memfunc_ref_like_helper<MemberFunc, Arg, ArgsType...>::type,
+        typename invoke_result_of_memfunc_pointer_like_helper<MemberFunc, Arg, ArgsType...>::type
+      >::type;
     };
 
     /// @e invoke_result_of_normal
@@ -2114,11 +2114,8 @@ namespace detail {
   EMBED_NODISCARD inline auto                                                                 \
   make_function(RetType (Class::* member_func) (ArgsType...) CONST_ VOLATILE_ REF_) noexcept  \
   -> function<RetType(CONST_ VOLATILE_ Class&, ArgsType...), sizeof(member_func)> {           \
-    return function<RetType(CONST_ VOLATILE_ Class&, ArgsType...), sizeof(member_func)>(      \
-      [member_func](CONST_ VOLATILE_ Class& object, ArgsType... args) -> RetType {            \
-        return (object.*member_func) (args...);                                               \
-      }                                                                                       \
-    );                                                                                        \
+    return function<RetType(CONST_ VOLATILE_ Class&,                                          \
+      ArgsType...), sizeof(member_func)>(member_func);                                        \
   }
 
   // Here, macros are used to overload the make_function, 
