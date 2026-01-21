@@ -548,9 +548,14 @@ namespace detail {
     template <typename T, typename U = remove_cvref_t<T>>
     struct inv_unwrap { using type = T; };
 
+#if !defined(EMBED_NO_STD_HEADER)
     template <typename T, typename RealType>
     struct inv_unwrap<T, std::reference_wrapper<RealType>>
     { using type = RealType&; };
+#else
+    // Users can overload the inv_unwrap function
+    // for the custom reference_wrapper here.
+#endif
 
     template <typename T>
     using inv_unwrap_t = typename inv_unwrap<T>::type;

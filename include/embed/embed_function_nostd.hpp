@@ -382,7 +382,10 @@ namespace embed { namespace detail { namespace fn_no_std {
 
   // std::__void_t
   template <typename T>
-  using __void_t = void;
+  struct make_void { using type = void; };
+
+  template <typename T>
+  using __void_t = typename make_void<T>::type;
 
   template<typename _Tp, typename = void>
   struct __add_pointer_helper
@@ -441,6 +444,52 @@ namespace embed { namespace detail { namespace fn_no_std {
   struct __is_convertible_helper
   : public is_void<To>::type
   { };
+
+  // std::is_base_of
+#if EMBED_HAS_BUILTIN(__is_base_of) || \
+  (defined(__GNUC__) && (__GNUC__ >= 5 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)))
+  template <typename Base, typename Derived>
+  struct is_base_of : bool_constant<__is_base_of(Base, Derived)> {};
+#else
+  template <typename Base, typename Derived>
+  struct is_base_of : false_type {};
+#endif
+
+  // __is_member_object_pointer_helper
+  template <typename T>
+  struct __is_member_object_pointer_helper
+  : public false_type {};
+
+  template <typename C, typename R>
+  struct __is_member_object_pointer_helper<R C::*>
+  : public bool_constant<!is_function<R>::value> {};
+
+  // std::is_member_object_pointer
+  template <typename T>
+  struct is_member_object_pointer
+  : public __is_member_object_pointer_helper<
+    typename remove_cv<
+      typename remove_reference<T>::type
+    >::type
+  >::type {};
+
+  // __is_member_function_pointer_helper
+  template <typename T>
+  struct __is_member_function_pointer_helper
+  : public false_type {};
+
+  template <typename C, typename R>
+  struct __is_member_function_pointer_helper<R C::*>
+  : public is_function<R> {};
+
+  // std::is_member_function_pointer
+  template <typename T>
+  struct is_member_function_pointer
+  : public __is_member_function_pointer_helper<
+    typename remove_cv<
+      typename remove_reference<T>::type
+    >::type
+  >::type {};
 
 #if defined(__GNUC__)
 # pragma GCC diagnostic push
