@@ -119,7 +119,7 @@ SOFTWARE.
  */
 #define EMBED_FN_NEED_FAST_CALL     false
 
-// assert nothrow callable function
+// Assert that the wrapped callable object does not throw exceptions.
 #define EMBED_FN_NOTHROW_CALLABLE   false
 
 // Ensure that no `bad_function_call` exception is thrown if true.
@@ -226,9 +226,9 @@ SOFTWARE.
 
 /// @c EMBED_INLINE
 #ifndef EMBED_INLINE
-# if defined(__GNUC__) || defined(__clang__)
-#  define EMBED_INLINE __attribute__((always_inline)) inline
-# elif defined(_MSC_VER)
+# if defined(__GNUC__) || defined(__clang__) || defined(__TASKING__)
+#  define EMBED_INLINE inline __attribute__((always_inline))
+# elif defined(_MSC_VER) || defined(__IAR_SYSTEMS_ICC__)
 #  define EMBED_INLINE __forceinline
 # else
 #  define EMBED_INLINE inline
@@ -401,7 +401,7 @@ namespace detail {
     const void* cvPtr;
     void (* fPtr) ();
 
-    static_assert(BufSize > 0, "embed::Fn require the BufSize greater than 0");
+    static_assert(BufSize > 0, "embed::Fn requires the BufSize greater than 0");
     char        buf[BufSize];
   };
 
@@ -521,18 +521,211 @@ namespace detail {
     template <typename T> struct make_void { using type = void; };
     template <typename T> using void_t = typename make_void<T>::type;
 
-    template <typename Func, typename... ArgsT>
-    struct invoke_result
+    /// @e remove_cvref_t for C++11
+    template <typename T>
+    using remove_cvref_t = typename std::remove_cv<
+      typename std::remove_reference<T>::type
+    >::type;
+
+    /// @brief trigger the SFINAE
+    class failure_type {};
+
+    /// @brief The call tag. Used by `invoke_result` and `invoke_impl`.
+    // free_func, static_memfunc, lambda, std::reference_wrapper<R Class::*>, ...
+    class invoke_tag__normal {};
+
+    // Class&, std::reference_wrapper<Class>, ...
+    class invoke_tag__memfn_ref_like {};
+    // Class*, std::unique_ptr<Class>, std::reference_wrapper<Class*>, ...
+    class invoke_tag__memfn_pointer_like {};
+
+    // Class&, std::reference_wrapper<Class>, ...
+    class invoke_tag__memobj_ref_like {};
+    // Class*, std::unique_ptr<Class>, std::reference_wrapper<Class*>, ...
+    class invoke_tag__memobj_pointer_like {};
+
+    /// @e inv_unwrap
+    template <typename T, typename U = remove_cvref_t<T>>
+    struct inv_unwrap { using type = T; };
+
+#if !defined(EMBED_NO_STD_HEADER)
+    template <typename T, typename RealType>
+    struct inv_unwrap<T, std::reference_wrapper<RealType>>
+    { using type = RealType&; };
+#else
+    // Users can overload the inv_unwrap function
+    // for the custom reference_wrapper here.
+#endif
+
+    template <typename T>
+    using inv_unwrap_t = typename inv_unwrap<T>::type;
+
+    /// @brief bind T and tag
+    template <typename T, typename Tag>
+    struct type_and_tag_wrapper
     {
-      using type = decltype(std::declval<Func>() (std::declval<ArgsT>()...));
+      using type = T;
+      using tag = Tag;
     };
+
+    template <typename MemObj, typename Arg>
+    struct invoke_result_of_memobj_ref_like_helper
+    {
+      template<typename> static failure_type S_test(...) { return {}; }
+      template<typename T> static type_and_tag_wrapper<
+        /* type = */ decltype(std::declval<T>().*std::declval<MemObj>()),
+        /* tag = */ invoke_tag__memobj_ref_like
+      > S_test(int) { return {}; }
+
+      using type = decltype(S_test<Arg>(0));
+    };
+
+    template <typename MemObj, typename Arg>
+    struct invoke_result_of_memobj_pointer_like_helper
+    {
+      template<typename> static failure_type S_test(...) { return {}; }
+      template<typename T> static type_and_tag_wrapper<
+        /* type = */ decltype((*std::declval<T>()).*std::declval<MemObj>()),
+        /* tag = */ invoke_tag__memobj_pointer_like
+      > S_test(int) { return {}; }
+
+      using type = decltype(S_test<Arg>(0));
+    };
+
+    /// @e invoke_result_of_memobj
+    template <typename T, typename U>
+    struct invoke_result_of_memobj;  // Undefined
+
+    template <typename Class, typename RetT, typename Arg>
+    struct invoke_result_of_memobj<RetT Class::*, Arg>
+    {
+      using MemberObj = RetT Class::*;
+      using ThisClass = remove_cvref_t<Arg>;
+
+      using type = typename std::conditional<
+        (std::is_same<Class, ThisClass>::value || std::is_base_of<Class, ThisClass>::value),
+        typename invoke_result_of_memobj_ref_like_helper<MemberObj, Arg>::type,
+        typename invoke_result_of_memobj_pointer_like_helper<MemberObj, Arg>::type
+      >::type;
+    };
+
+    template <typename MemFunc, typename Arg, typename... ArgsType>
+    struct invoke_result_of_memfunc_ref_like_helper
+    {
+      template<typename> static failure_type S_test(...) { return {}; }
+      template<typename T> static type_and_tag_wrapper<
+        /* type = */ decltype((std::declval<T>().*std::declval<MemFunc>())(
+          std::declval<ArgsType>()...
+        )),
+        /* tag = */ invoke_tag__memfn_ref_like
+      > S_test(int) { return {}; }
+
+      using type = decltype(S_test<Arg>(0));
+    };
+
+    template <typename MemFunc, typename Arg, typename... ArgsType>
+    struct invoke_result_of_memfunc_pointer_like_helper
+    {
+      template<typename> static failure_type S_test(...) { return {}; }
+      template<typename T> static type_and_tag_wrapper<
+        /* type = */ decltype(((*std::declval<T>()).*std::declval<MemFunc>())(
+          std::declval<ArgsType>()...
+        )),
+        /* tag = */ invoke_tag__memfn_pointer_like
+      > S_test(int) { return {}; }
+
+      using type = decltype(S_test<Arg>(0));
+    };
+
+    /// @e invoke_result_of_memfunc
+    template <typename... T>
+    struct invoke_result_of_memfunc;  // Undefined
+
+    template <typename Class, typename RetT, typename Arg, typename... ArgsType>
+    struct invoke_result_of_memfunc<RetT Class::*, Arg, ArgsType...>
+    {
+      using MemberFunc = RetT Class::*;
+      using ThisClass = remove_cvref_t<Arg>;
+
+      using type = typename std::conditional<
+        (std::is_same<Class, ThisClass>::value || std::is_base_of<Class, ThisClass>::value),
+        typename invoke_result_of_memfunc_ref_like_helper<MemberFunc, Arg, ArgsType...>::type,
+        typename invoke_result_of_memfunc_pointer_like_helper<MemberFunc, Arg, ArgsType...>::type
+      >::type;
+    };
+
+    /// @e invoke_result_of_normal
+    template <typename Functor, typename... ArgsType>
+    struct invoke_result_of_normal
+    {
+      template<typename> static failure_type S_test(...) { return {}; }
+      template<typename T> static type_and_tag_wrapper<
+        /* type = */ decltype(std::declval<T>()(
+          std::declval<ArgsType>()...)),
+        /* tag = */ invoke_tag__normal
+      > S_test(int) { return {}; }
+
+      using type = decltype(S_test<Functor>(0));
+    };
+
+    /// @e invoke_result_impl
+    template <bool, bool, typename Functor, typename... ArgsType>
+    struct invoke_result_impl
+    {
+      using type = failure_type;  // failure_type::type will trigger SFINAE
+    };
+
+    template <typename PointerToMemObj, typename Arg>
+    struct invoke_result_impl<
+      /* is_memfunc_ptr = */ false,
+      /* is_memobj_ptr = */ true,
+      PointerToMemObj, Arg
+    > {
+      using type = typename invoke_result_of_memobj<
+        typename std::decay<PointerToMemObj>::type,
+        inv_unwrap_t<Arg>
+      >::type;
+    }; // member data
+
+    template <typename PointerToMemFunc, typename Arg, typename... ArgsType>
+    struct invoke_result_impl<
+      /* is_memfunc_ptr = */ true,
+      /* is_memobj_ptr = */ false,
+      PointerToMemFunc, Arg, ArgsType...
+    > {
+      using type = typename invoke_result_of_memfunc<
+        typename std::decay<PointerToMemFunc>::type,
+        inv_unwrap_t<Arg>, ArgsType...
+      >::type;
+    }; // member function
+
+    template <typename NormalFunc, typename... ArgsType>
+    struct invoke_result_impl<
+      /* is_memfunc_ptr = */ false,
+      /* is_memobj_ptr = */ false,
+      NormalFunc, ArgsType...
+    > {
+      using type = typename invoke_result_of_normal<
+        NormalFunc, ArgsType...
+      >::type;
+    }; // normal function
+
+    /// @brief Get the invoke result and invoke tag. Same as std::invoke_result.
+    template <typename Func, typename... ArgsT>
+    struct invoke_result : public invoke_result_impl<
+      std::is_member_function_pointer<
+        typename std::remove_reference<Func>::type
+      >::value,  // first -> is_member_func
+      std::is_member_object_pointer<
+        typename std::remove_reference<Func>::type
+      >::value,  // second -> is_member_obj
+      Func, ArgsT...
+    >::type {};
 
     template <typename To, typename From>
     struct reference_converts_from_temporary
     {
-      using no_cvref_To = typename std::remove_cv<
-        typename std::remove_reference<To>::type
-      >::type;
+      using no_cvref_To = remove_cvref_t<To>;
 
       // prvalue(pure right value) is being bound to const lvalue(left value)
       static constexpr bool pr_to_l = std::is_lvalue_reference<To>::value
@@ -677,6 +870,7 @@ namespace detail {
     };
 
     /// @e arguments_are_same_impl
+    /// @brief check if arguments are all same.
     template <typename ArgsPackageFrom, typename ArgsPackageTo, std::size_t Idx>
     struct arguments_are_same_impl
     {
@@ -710,28 +904,92 @@ namespace detail {
       arguments_are_same_impl<ArgsPackageFrom, ArgsPackageTo, ArgNum-1>
     >::type { };
 
+    /**
+     * @e invoke_impl
+     * @brief Distribute the call of normal function,
+     * member function and member object.
+     */
+    template <typename RetT, typename Func, typename... Args>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
+    invoke_impl(invoke_tag__normal, Func&& fn, Args&&... args)
+      noexcept(noexcept(std::forward<Func>(fn)(std::forward<Args>(args)...)))
+    { return std::forward<Func>(fn)(std::forward<Args>(args)...); }
+
+    template <typename RetT, typename MemObj, typename Arg>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
+    invoke_impl(invoke_tag__memobj_ref_like, MemObj&& obj, Arg&& arg)
+      noexcept(noexcept(static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemObj>(obj)))
+    { return static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemObj>(obj); }
+
+    template <typename RetT, typename MemObj, typename Arg>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
+    invoke_impl(invoke_tag__memobj_pointer_like, MemObj&& obj, Arg&& arg)
+      noexcept(noexcept((*std::forward<Arg>(arg)).*std::forward<MemObj>(obj)))
+    { return (*std::forward<Arg>(arg)).*std::forward<MemObj>(obj); }
+
+    template <typename RetT, typename MemFunc, typename Arg, typename... ArgsType>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
+    invoke_impl(invoke_tag__memfn_ref_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
+      noexcept(noexcept(
+        (static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemFunc>(memfn))(
+          std::forward<ArgsType>(args)...)))
+    {
+      return (static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemFunc>(memfn))(
+        std::forward<ArgsType>(args)...
+      );
+    }
+
+    template <typename RetT, typename MemFunc, typename Arg, typename... ArgsType>
+    static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
+    invoke_impl(invoke_tag__memfn_pointer_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
+      noexcept(noexcept(
+        ((*std::forward<Arg>(arg)).*std::forward<MemFunc>(memfn))(
+          std::forward<ArgsType>(args)...)))
+    {
+      return ((*std::forward<Arg>(arg)).*std::forward<MemFunc>(memfn))(
+        std::forward<ArgsType>(args)...
+      );
+    }
+
     /// @e invoke_r
     template <typename RetType, typename Callee, typename... ArgsType>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<!std::is_void<RetType>::value, RetType>::type
     invoke_r(Callee&& fn, ArgsType&&... args)
-      noexcept(noexcept(static_cast<Callee&&>(fn)(static_cast<ArgsType&&>(args)...)))
+      noexcept(noexcept(
+        invoke_impl<typename invoke_result<Callee, ArgsType...>::type>(
+          typename invoke_result<Callee, ArgsType...>::tag{}, 
+          std::forward<Callee>(fn), std::forward<ArgsType>(args)...))
+      && Callable<RetType, Callee, ArgsType...>::NoThrow_conv::value)
     {
       // The return type is not `void`.
-      return std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
+      using result  = invoke_result<Callee, ArgsType...>;
+      using type    = typename result::type;
+      using tag     = typename result::tag;
+
+      return invoke_impl<type>(tag{}, std::forward<Callee>(fn), std::forward<ArgsType>(args)...);
     }
 
     template <typename RetType, typename Callee, typename... ArgsType>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR
     typename std::enable_if<std::is_void<RetType>::value>::type
     invoke_r(Callee&& fn, ArgsType&&... args)
-      noexcept(noexcept(static_cast<Callee&&>(fn)(static_cast<ArgsType&&>(args)...)))
+      noexcept(noexcept(
+        invoke_impl<typename invoke_result<Callee, ArgsType...>::type>(
+          typename invoke_result<Callee, ArgsType...>::tag{}, 
+          std::forward<Callee>(fn), std::forward<ArgsType>(args)...)))
     {
       // The return type is `void`.
-      std::forward<Callee>(fn)(std::forward<ArgsType>(args)...);
+      using result  = invoke_result<Callee, ArgsType...>;
+      using type    = typename result::type;
+      using tag     = typename result::tag;
+
+      invoke_impl<type>(tag{}, std::forward<Callee>(fn), std::forward<ArgsType>(args)...);
     }
 
     /// @e is_similar_Fn
+    /// @brief check if two Fn are similar.
+    /// "Similar" means the function signature is the same, but may have different buffer size.
     template <
       typename SelfRet, typename SelfArgs_package, std::size_t SelfArgNum, std::size_t SelfBuf,
       typename OtherRet, typename OtherArgs_package, std::size_t OtherArgNum, std::size_t OtherBuf>
@@ -845,9 +1103,7 @@ namespace detail {
     template <typename Functor>
     struct is_movable_and_non_copyable
     {
-      using Func = typename std::remove_cv<
-        typename std::remove_reference<Functor>::type
-      >::type;
+      using Func = remove_cvref_t<Functor>;
       static constexpr bool value = std::is_move_constructible<Func>::value
         && !std::is_copy_constructible<Func>::value;
     };
@@ -1203,11 +1459,7 @@ namespace detail {
   private:
     template <typename Functor>
     using DecayFunc_t = typename std::enable_if<
-      !std::is_same<Fn,
-        typename std::remove_cv<
-          typename std::remove_reference<Functor>::type
-        >::type
-      >::value,
+      !std::is_same<Fn, FnTraits::remove_cvref_t<Functor> >::value,
       typename std::decay<Functor>::type
     >::type;
 
@@ -1370,7 +1622,7 @@ namespace detail {
     Fn(Functor&& func) noexcept
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require the Functor is callable and the Signature match RetType");
+        "embed::Fn requires the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
         "embed::Fn target must be copy-constructible");
@@ -1407,7 +1659,7 @@ namespace detail {
     Fn(Functor&& func)
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require the Functor is callable and the Signature match RetType");
+        "embed::Fn requires the Functor is callable and the Signature match RetType");
 
       if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
       {
@@ -1543,7 +1795,7 @@ namespace detail {
     Fn(Functor&& func) noexcept
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require the Functor is callable and the Signature match RetType");
+        "embed::Fn requires the Functor is callable and the Signature match RetType");
 
       static_assert(std::is_copy_constructible<DecayFunctor>::value,
         "embed::Fn target must be copy-constructible");
@@ -1578,7 +1830,7 @@ namespace detail {
     Fn(Functor&& func)
     {
       static_assert(Fn::Callable<Functor>::value,
-        "embed::Fn require the Functor is callable and the Signature match RetType");
+        "embed::Fn requires the Functor is callable and the Signature match RetType");
 
       if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
       {
@@ -1867,11 +2119,8 @@ namespace detail {
   EMBED_NODISCARD inline auto                                                                 \
   make_function(RetType (Class::* member_func) (ArgsType...) CONST_ VOLATILE_ REF_) noexcept  \
   -> function<RetType(CONST_ VOLATILE_ Class&, ArgsType...), sizeof(member_func)> {           \
-    return function<RetType(CONST_ VOLATILE_ Class&, ArgsType...), sizeof(member_func)>(      \
-      [member_func](CONST_ VOLATILE_ Class& object, ArgsType... args) -> RetType {            \
-        return (object.*member_func) (args...);                                               \
-      }                                                                                       \
-    );                                                                                        \
+    return function<RetType(CONST_ VOLATILE_ Class&,                                          \
+      ArgsType...), sizeof(member_func)>(member_func);                                        \
   }
 
   // Here, macros are used to overload the make_function, 

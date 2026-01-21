@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 
 #if defined(EMBED_NO_STD_HEADER)
 # include "embed/embed_function.hpp"
@@ -25,7 +26,7 @@ namespace std {
   printf("[       OK ] " #test_suite_name " - " #test_name "\n")
 
 #define MESSAGE_FAIL(msg, ...) \
-  do { printf("[  FAILED  ] "); MESSAGE_FMT(msg, __VA_ARGS__); } while(0)
+  do { printf("[  FAILED  ] "); MESSAGE_FMT(msg, __VA_ARGS__); fflush(stdout); exit(1); } while(0)
 
 #define MESSAGE_BEGIN(test_suite_name, test_name) \
   printf("[----------] [BEGIN] " #test_suite_name " - " #test_name "\n")

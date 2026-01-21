@@ -29,11 +29,12 @@ TEST(SizeAndTraitsTest, LayoutMatch) {
 }
 
 TEST(SizeAndTraitsTest, NoThrowDefaultConstructibleTest) {
+#if !defined(EMBED_NO_STD_HEADER)
     using fn1_t = embed::function<void()>;
     using fn2_t = embed::function<void(int)>;
     using fn3_t = embed::function<void(int, double)>;
     using fn4_t = embed::function<char(int, double)>;
-#if !defined(EMBED_NO_STD_HEADER)
+
     ASSERT_EQ(std::is_nothrow_default_constructible<fn1_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_default_constructible<fn2_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_default_constructible<fn3_t>::value, true, "%d");
@@ -43,11 +44,12 @@ TEST(SizeAndTraitsTest, NoThrowDefaultConstructibleTest) {
 }
 
 TEST(SizeAndTraitsTest, NoThrowCopyConstructibleTest) {
+#if !defined(EMBED_NO_STD_HEADER)
     using fn1_t = embed::function<void()>;
     using fn2_t = embed::function<void(int)>;
     using fn3_t = embed::function<void(int, double)>;
     using fn4_t = embed::function<char(int, double)>;
-#if !defined(EMBED_NO_STD_HEADER)
+
     ASSERT_EQ(std::is_nothrow_copy_constructible<fn1_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_copy_constructible<fn2_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_copy_constructible<fn3_t>::value, true, "%d");
@@ -57,11 +59,12 @@ TEST(SizeAndTraitsTest, NoThrowCopyConstructibleTest) {
 }
 
 TEST(SizeAndTraitsTest, NoThrowMoveConstructibleTest) {
+#if !defined(EMBED_NO_STD_HEADER)
     using fn1_t = embed::function<void()>;
     using fn2_t = embed::function<void(int)>;
     using fn3_t = embed::function<void(int, double)>;
     using fn4_t = embed::function<char(int, double)>;
-#if !defined(EMBED_NO_STD_HEADER)
+
     ASSERT_EQ(std::is_nothrow_move_constructible<fn1_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_move_constructible<fn2_t>::value, true, "%d");
     ASSERT_EQ(std::is_nothrow_move_constructible<fn3_t>::value, true, "%d");
