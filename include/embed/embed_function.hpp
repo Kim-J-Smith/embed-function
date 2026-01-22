@@ -1619,6 +1619,14 @@ namespace detail {
     template <typename Functor>
     using Callable = typename MyModifierHelper::Callable<Functor>;
 
+    using MyModifierHelper::M_functor;
+
+    using MyModifierHelper::M_manager;
+
+#if ( EMBED_FN_NEED_FAST_CALL == true )
+    using MyModifierHelper::M_invoker;
+#endif
+
     // ArgsType RetType and ArgsNum
     using ArgsPackage   = typename          FnTraits::unwrap_signature<Signature>::args;
     using RetType       = typename          FnTraits::unwrap_signature<Signature>::ret;
