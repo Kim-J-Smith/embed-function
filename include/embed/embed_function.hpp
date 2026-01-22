@@ -1573,9 +1573,11 @@ namespace detail {
     }
 
     // Create an empty function wrapper.
+    /// @deprecated Creating an empty embed::Fn instance is risky.
     EMBED_INLINE Fn() noexcept = default;
 
     // Create an empty function wrapper.
+    /// @deprecated Creating an empty embed::Fn instance is risky.
     EMBED_INLINE Fn(std::nullptr_t) noexcept {}
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
