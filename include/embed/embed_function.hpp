@@ -96,6 +96,13 @@ SOFTWARE.
  *  embed::Fn fn = callable_class{}; // require C++17 template deduce guide
  * 
  *  embed::Fn fn = callable_class{...}; // require C++17 template deduce guide
+ * 
+ * TODO:
+ * 
+ *  1. Support the use of "const", "volatile", "&", "&&" etc. to modify the function signature.
+ * 
+ *  2. Support member functions that are "&&"-marked for packaging.
+ * 
  */
 
 /// @c C++11 "embed_function.hpp"
@@ -1074,13 +1081,34 @@ namespace detail {
     /// @e unwrap_signature
     template <typename Signature> struct unwrap_signature;
 
-    template <typename RetType, typename... ArgsType>
-    struct unwrap_signature<RetType(ArgsType...)>
-    {
-      using ret = RetType;
-      using args = args_package<ArgsType...>;
-      static constexpr std::size_t arg_num = sizeof... (ArgsType);
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
+    F_(, , )                                \
+    F_(const, , )                           \
+    F_(, volatile, )                        \
+    F_(, , &)                               \
+    F_(const, volatile, )                   \
+    F_(const, , &)                          \
+    F_(, volatile, &)                       \
+    F_(const, volatile, &)                  \
+    F_(, , &&)                              \
+    F_(const, , &&)                         \
+    F_(, volatile, &&)                      \
+    F_(const, volatile, &&)
+
+#define EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE(C, V, REF)               \
+    template <typename RetType, typename... ArgsType>               \
+    struct unwrap_signature<RetType(ArgsType...) C V REF> {         \
+      using ret = RetType;                                          \
+      using args = args_package<ArgsType...>;                       \
+      static constexpr std::size_t arg_num = sizeof... (ArgsType);  \
     };
+
+    // unwrap_signature for different kinds of signature.(const / volatile / {& | &&})
+    EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE)
+
+#undef EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE
+
+#undef EMBED_FN_GENERATE_CODE_C_V_REF
 
     /// @e is_Fn_and_similar
     template <typename Signature, typename Functor>
