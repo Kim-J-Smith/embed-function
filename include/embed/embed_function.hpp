@@ -1476,16 +1476,125 @@ namespace detail {
     }
   };
 
+#define EMBED_FN_MODIFIER_HELPER_MAIN_BODY                                                \
+  template <typename Functor>                                                             \
+  using Copyable = FnToolBox::FnManagerCopyable<RetType(ArgsType...), Functor, BufSize>;  \
+  template <typename Functor>                                                             \
+  using MoveOnly = FnToolBox::FnManagerMoveOnly<RetType(ArgsType...), Functor, BufSize>;  \
+  template <typename Functor>                                                             \
+  using Invoker = FnToolBox::FnInvoker<RetType(ArgsType...), Functor, BufSize>;           \
+  template <typename Functor>                                                             \
+  using Callable = FnToolBox::FnTraits::Callable<RetType, Functor, ArgsType...>;          \
+  using Invoker_Type = RetType (*)                                                        \
+    (const FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;                    \
+  using Manager_Type = Invoker_Type (*) (FnFunctor<BufSize>&,                             \
+    const FnFunctor<BufSize>&, FnToolBox::FunctorManagerOpCode) EMBED_CXX17_NOEXCEPT;
+
+#if ( EMBED_FN_NEED_FAST_CALL == true )
+# define EMBED_FN_MODIFIER_HELPER_MEMVARS \
+  FnFunctor<BufSize>  M_functor{};        \
+  Manager_Type        M_manager{};        \
+  Invoker_Type        M_invoker{};
+# define EMBED_FN_MODIFIER_HELPER_INVOKE_BODY                                 \
+  if EMBED_LIKELY(this->M_invoker)                                            \
+    return this->M_invoker(this->M_functor, std::forward<ArgsType>(args)...); \
+  else                                                                        \
+    detail::throw_bad_function_call_or_abort(); /* may not throw exception */
+#else
+# define EMBED_FN_MODIFIER_HELPER_MEMVARS \
+  FnFunctor<BufSize>  M_functor{};        \
+  Manager_Type        M_manager{};
+# define EMBED_FN_MODIFIER_HELPER_INVOKE_BODY                                   \
+  if EMBED_LIKELY(this->M_manager) {                                            \
+    detail::FnFunctor<BufSize> nil;                                             \
+    Invoker_Type invoker = this->M_manager(nil, nil, FnToolBox::OP_get_invoker);\
+    return invoker(this->M_functor, std::forward<ArgsType>(args)...);           \
+  }                                                                             \
+  else                                                                          \
+    detail::throw_bad_function_call_or_abort(); /* may not throw exception */
+#endif
+
+  /**
+   * @brief Help "embed::Fn" handle various different modifiers.
+   */
+  template <typename Signature, std::size_t>
+  struct FnModifierHelper
+  {
+    static_assert(
+      std::is_void<FnToolBox::FnTraits::void_t<Signature>>::value /* always false */,
+      "The Signature must be like `Ret(Args...) [const | volatile | &]`."
+      " And your signature format is incorrect.");
+  };
+
+#define EMBED_FN_MODIFIER_HELPER_CODE(C, V, REF)                          \
+  template <typename RetType, std::size_t BufSize, typename... ArgsType>  \
+  struct FnModifierHelper<RetType(ArgsType...) C V REF, BufSize>          \
+  {                                                                       \
+    protected:                                                            \
+    EMBED_FN_MODIFIER_HELPER_MAIN_BODY                                    \
+    EMBED_FN_MODIFIER_HELPER_MEMVARS                                      \
+    public:                                                               \
+    EMBED_INLINE RetType operator() (ArgsType... args) C V REF            \
+    EMBED_FN_CASE_NOEXCEPT {                                              \
+      EMBED_FN_MODIFIER_HELPER_INVOKE_BODY                                \
+    }                                                                     \
+  };
+
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
+  F_(, , )                                  \
+  F_(const, , )                             \
+  F_(, volatile, )                          \
+  F_(, , &)                                 \
+  F_(const, volatile, )                     \
+  F_(const, , &)                            \
+  F_(, volatile, &)                         \
+  F_(const, volatile, &)                    \
+  F_(, , &&)                                \
+  F_(const, , &&)                           \
+  F_(, volatile, &&)                        \
+  F_(const, volatile, &&)
+
+# if defined(__clang__)
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wuninitialized"
+# elif defined(__GNUC__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+# endif
+
+  /**
+   * 
+   */
+  EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_MODIFIER_HELPER_CODE)
+
+# if defined(__clang__)
+#  pragma clang diagnostic pop
+# elif defined(__GNUC__)
+#  pragma GCC diagnostic pop
+# endif
+
+
+#undef EMBED_FN_GENERATE_CODE_C_V_REF
+#undef EMBED_FN_MODIFIER_HELPER_CODE
+#undef EMBED_FN_MODIFIER_HELPER_MEMVARS
+#undef EMBED_FN_MODIFIER_HELPER_INVOKE_BODY
+#undef EMBED_FN_MODIFIER_HELPER_MAIN_BODY
+
 } // end namespace embed::detail
 
   /**
    * @brief   A light polymorphic wrapper for callable object.
    * @note    Only use stack memory. NO HEAP MEMORY!
    */
-  template <typename RetType, std::size_t BufSize, typename... ArgsType>
-  class Fn<RetType(ArgsType...), BufSize> : private detail::FnToolBox
+  // template <typename RetType, std::size_t BufSize, typename... ArgsType>
+  template <typename Signature, std::size_t BufSize>
+  class Fn
+  : private detail::FnToolBox
+  , public detail::FnModifierHelper<Signature, BufSize>
   {
   private:
+    using MyModifierHelper = detail::FnModifierHelper<Signature, BufSize>;
+
     template <typename Functor>
     using DecayFunc_t = typename std::enable_if<
       !std::is_same<Fn, FnTraits::remove_cvref_t<Functor> >::value,
@@ -1493,44 +1602,30 @@ namespace detail {
     >::type;
 
     template <typename Functor>
-    using MyManager = FnManagerCopyable<RetType(ArgsType...), Functor, BufSize>;
+    using MyManager = typename MyModifierHelper::Copyable<Functor>;
+
+    template <typename Functor>
+    using MyMoveOnly = typename MyModifierHelper::MoveOnly<Functor>;
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
     template <typename Functor>
-    using MyInvoker = FnInvoker<RetType(ArgsType...), Functor, BufSize>;
+    using MyInvoker = typename MyModifierHelper::Invoker<Functor>;
 #endif
 
-    template <typename Functor>
-    using MyMoveOnly = FnManagerMoveOnly<RetType(ArgsType...), Functor, BufSize>;
+    using Invoker_Type = typename MyModifierHelper::Invoker_Type;
+
+    using Manager_Type = typename MyModifierHelper::Manager_Type;
 
     template <typename Functor>
-    using Callable = FnTraits::Callable<RetType, Functor, ArgsType...>;
+    using Callable = typename MyModifierHelper::Callable<Functor>;
 
-    using Invoker_Type = RetType (*) (const detail::FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
-
-    using Manager_Type = 
-      Invoker_Type (*) (detail::FnFunctor<BufSize>&, const detail::FnFunctor<BufSize>&, FunctorManagerOpCode) EMBED_CXX17_NOEXCEPT;
-
-  private:
-
-    // The `M_functor` store the callable object.
-    detail::FnFunctor<BufSize>    M_functor{};
-
-    // The `M_manager` describes how to move / copy / destroy the `M_functor`,
-    // and even describes how to invoke `M_functor` when not using `M_invoker`.
-    Manager_Type                  M_manager{};
-
-#if ( EMBED_FN_NEED_FAST_CALL == true )
-
-    // invoker for the functor (func pointer)
-    /// IF @b EMBED_FN_NEED_FAST_CALL is not true, `M_manager` 
-    /// will help Fn invoke functor instead of `M_invoker`.
-    Invoker_Type                  M_invoker{};
-
-#endif
+    // ArgsType RetType and ArgsNum
+    using ArgsPackage   = typename          FnTraits::unwrap_signature<Signature>::args;
+    using RetType       = typename          FnTraits::unwrap_signature<Signature>::ret;
+    static constexpr std::size_t ArgsNum =  FnTraits::unwrap_signature<Signature>::arg_num;
 
     // Regard all Fn<Signature, BufSize> as friend class.
-    template <typename Signature, std::size_t BSize>
+    template <typename Sig, std::size_t BSize>
     friend class Fn;
 
   public:
@@ -1618,7 +1713,7 @@ namespace detail {
       const Fn<OtherRet(OtherArgs...), OtherSize>& fn,
       typename std::enable_if<
         FnTraits::is_similar_Fn<
-          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
+          RetType, ArgsPackage, ArgsNum, BufSize,
           OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
         >::value,
         bool
@@ -1732,17 +1827,6 @@ namespace detail {
       std::swap(M_invoker, fn.M_invoker);
     }
 
-    /// @brief Call the functor with type `ArgsType...` arguments.
-    /// @attention This contravenes [res.on.data.races]/p3. (same as `std::function`)
-    EMBED_INLINE RetType operator() (ArgsType... args) const
-    EMBED_FN_CASE_NOEXCEPT
-    {
-      if EMBED_LIKELY(M_invoker)
-        return M_invoker(M_functor, std::forward<ArgsType>(args)...);
-      else
-        detail::throw_bad_function_call_or_abort(); /* may not throw exception */
-    }
-
     /// @brief Overload the function specifically for the case where nullptr is
     /// passed as a parameter, in order to improve the program's running efficiency. 
     /// (Using the `swap` method would be much slower.)
@@ -1792,7 +1876,7 @@ namespace detail {
       const Fn<OtherRet(OtherArgs...), OtherSize>& fn,
       typename std::enable_if<
         FnTraits::is_similar_Fn<
-          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
+          RetType, ArgsPackage, ArgsNum, BufSize,
           OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
         >::value,
         bool
@@ -1900,34 +1984,6 @@ namespace detail {
       std::swap(M_manager, fn.M_manager);
     }
 
-# if defined(__clang__)
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Wuninitialized"
-# elif defined(__GNUC__)
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-# endif
-
-    /// @brief Call the functor with type `ArgsType...` arguments.
-    /// @attention This contravenes [res.on.data.races]/p3. (same as `std::function`)
-    EMBED_INLINE RetType operator() (ArgsType... args) const
-    EMBED_FN_CASE_NOEXCEPT
-    {
-      if EMBED_LIKELY(M_manager) {
-        detail::FnFunctor<BufSize> nil;
-        Invoker_Type invoker = M_manager(nil, nil, OP_get_invoker);
-        return invoker(M_functor, std::forward<ArgsType>(args)...);
-      }
-      else
-        detail::throw_bad_function_call_or_abort(); /* may not throw exception */
-    }
-
-# if defined(__clang__)
-#  pragma clang diagnostic pop
-# elif defined(__GNUC__)
-#  pragma GCC diagnostic pop
-# endif
-
     /// @brief Overload the function specifically for the case where nullptr is
     /// passed as a parameter, in order to improve the program's running efficiency. 
     /// (Using the `swap` method would be much slower.)
@@ -1967,7 +2023,7 @@ namespace detail {
     noexcept(
       std::enable_if<
         FnTraits::is_similar_Fn<
-          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
+          RetType, ArgsPackage, ArgsNum, BufSize,
           RetT, FnTraits::args_package<ArgsT...>, sizeof...(ArgsT), OtherBufSize
         >::value,
         std::true_type
