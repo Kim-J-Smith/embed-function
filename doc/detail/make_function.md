@@ -58,6 +58,10 @@ int main()
     auto fn7 = embed::make_function(static_cast<int(*)(int)>(
         example_overload_func));
 
+    // The type of `fn7` is embed::function<void(int, int)>
+    // The signature of fn8 is different with example_free_function.
+    auto fn8 = embed::make_function<void(int, int)>(example_free_function);
+
     return 0;
 }
 
