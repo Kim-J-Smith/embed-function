@@ -489,16 +489,12 @@ namespace detail {
     template <typename Signature, typename Functor, std::size_t BufSize>
     struct FnManagerCopyable;
 
-#if (EMBED_FN_NEED_FAST_CALL == true)
-
     /// @c FnInvoker is aimed to help Fn call the functor.
     /// When @b EMBED_FN_NEED_FAST_CALL is false, FnManagerCopyable
     /// will help Fn call the functor instead of FnInvoker,
     /// which will save the RAM, but is slower than FnInvoker.
     template <typename Signature, typename Functor, std::size_t BufSize>
     struct FnInvoker;
-
-#endif
 
     // embed::Fn need to wrap non-copyable callable object.
     /// @c FnManagerMoveOnly is aimed to help Fn manage move-only functor.
@@ -1079,7 +1075,12 @@ namespace detail {
     };
 
     /// @e unwrap_signature
-    template <typename Signature> struct unwrap_signature;
+    template <typename Signature> struct unwrap_signature
+    {
+      static_assert(std::is_void<void_t<Signature>>::value,
+        "The Signature must be like `Ret(Args...) [const | volatile | &]`."
+        " And your signature format is incorrect.");
+    };
 
 # define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
     F_(, , )                                \
@@ -1101,6 +1102,7 @@ namespace detail {
       using ret = RetType;                                          \
       using args = args_package<ArgsType...>;                       \
       static constexpr std::size_t arg_num = sizeof... (ArgsType);  \
+      using pure_sig = RetType(ArgsType...);                        \
     };
 
     // unwrap_signature for different kinds of signature.(const / volatile / {& | &&})
@@ -1302,7 +1304,6 @@ namespace detail {
 
   };
 
-#if (EMBED_FN_NEED_FAST_CALL == true)
 
   /**
    * @c FnToolBox::FnInvoker
@@ -1329,7 +1330,6 @@ namespace detail {
 
   };
 
-#endif
 
   /**
    * @c FnToolBox::FnManagerMoveOnly
