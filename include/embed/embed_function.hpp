@@ -96,6 +96,13 @@ SOFTWARE.
  *  embed::Fn fn = callable_class{}; // require C++17 template deduce guide
  * 
  *  embed::Fn fn = callable_class{...}; // require C++17 template deduce guide
+ * 
+ * TODO:
+ * 
+ *  1. Support the use of "const", "volatile", "&", "&&" etc. to modify the function signature.
+ * 
+ *  2. Support member functions that are "&&"-marked for packaging.
+ * 
  */
 
 /// @c C++11 "embed_function.hpp"
@@ -459,7 +466,7 @@ namespace detail {
   {
   public:
 
-    // cooperate with M_manager in FnManager
+    // cooperate with M_manager in FnManagerCopyable
     enum FunctorManagerOpCode {
       OP_clone_functor,     // Clone the M_functor
       OP_move_functor,      // Move the M_functor
@@ -477,14 +484,15 @@ namespace detail {
     struct FnTraits;
 
     // embed::Fn will forget the type of Functor
-    /// @c FnManager is aimed to remember the type, help Fn manage functor.
+    /// @c FnManagerCopyable is aimed to remember the type, 
+    /// help Fn manage copyable functor.
     template <typename Signature, typename Functor, std::size_t BufSize>
-    struct FnManager;
+    struct FnManagerCopyable;
 
 #if (EMBED_FN_NEED_FAST_CALL == true)
 
     /// @c FnInvoker is aimed to help Fn call the functor.
-    /// When @b EMBED_FN_NEED_FAST_CALL is false, FnManager
+    /// When @b EMBED_FN_NEED_FAST_CALL is false, FnManagerCopyable
     /// will help Fn call the functor instead of FnInvoker,
     /// which will save the RAM, but is slower than FnInvoker.
     template <typename Signature, typename Functor, std::size_t BufSize>
@@ -492,10 +500,10 @@ namespace detail {
 
 #endif
 
-    // embed::Fn cannot wrap non-copyable callable object.
-    /// @c FnNonCopyable is aimed to help Fn manage them.
+    // embed::Fn need to wrap non-copyable callable object.
+    /// @c FnManagerMoveOnly is aimed to help Fn manage move-only functor.
     template <typename Signature, typename Functor, std::size_t BufSize>
-    struct FnNonCopyable;
+    struct FnManagerMoveOnly;
 
   };
 
@@ -1073,13 +1081,34 @@ namespace detail {
     /// @e unwrap_signature
     template <typename Signature> struct unwrap_signature;
 
-    template <typename RetType, typename... ArgsType>
-    struct unwrap_signature<RetType(ArgsType...)>
-    {
-      using ret = RetType;
-      using args = args_package<ArgsType...>;
-      static constexpr std::size_t arg_num = sizeof... (ArgsType);
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
+    F_(, , )                                \
+    F_(const, , )                           \
+    F_(, volatile, )                        \
+    F_(, , &)                               \
+    F_(const, volatile, )                   \
+    F_(const, , &)                          \
+    F_(, volatile, &)                       \
+    F_(const, volatile, &)                  \
+    F_(, , &&)                              \
+    F_(const, , &&)                         \
+    F_(, volatile, &&)                      \
+    F_(const, volatile, &&)
+
+#define EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE(C, V, REF)               \
+    template <typename RetType, typename... ArgsType>               \
+    struct unwrap_signature<RetType(ArgsType...) C V REF> {         \
+      using ret = RetType;                                          \
+      using args = args_package<ArgsType...>;                       \
+      static constexpr std::size_t arg_num = sizeof... (ArgsType);  \
     };
+
+    // unwrap_signature for different kinds of signature.(const / volatile / {& | &&})
+    EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE)
+
+#undef EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE
+
+#undef EMBED_FN_GENERATE_CODE_C_V_REF
 
     /// @e is_Fn_and_similar
     template <typename Signature, typename Functor>
@@ -1126,11 +1155,11 @@ namespace detail {
 
 
   /**
-   * @c FnToolBox::FnManager
+   * @c FnToolBox::FnManagerCopyable
    * @brief Manage the functor for embed::Fn.
    */
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct FnToolBox::FnManager<RetType(ArgsType...), Functor, BufSize>
+  struct FnToolBox::FnManagerCopyable<RetType(ArgsType...), Functor, BufSize>
   {
   public:  
     constexpr static std::size_t M_max_size = sizeof(FnBufType<BufSize>);
@@ -1226,7 +1255,7 @@ namespace detail {
 #if ( EMBED_FN_NEED_FAST_CALL == false )
 
     /// @e M_invoke
-    // This function only used when we expect FnManager to help Fn
+    // This function only used when we expect FnManagerCopyable to help Fn
     // call the functor instead of FnInvoker.
     static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
@@ -1303,11 +1332,11 @@ namespace detail {
 #endif
 
   /**
-   * @c FnToolBox::FnNonCopyable
+   * @c FnToolBox::FnManagerMoveOnly
    * @brief Manager non-copyable objects.
    */
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct FnToolBox::FnNonCopyable<RetType(ArgsType...), Functor, BufSize>
+  struct FnToolBox::FnManagerMoveOnly<RetType(ArgsType...), Functor, BufSize>
   {
   public:
     constexpr static std::size_t M_max_size = sizeof(FnBufType<BufSize>);
@@ -1400,7 +1429,7 @@ namespace detail {
 #if ( EMBED_FN_NEED_FAST_CALL == false )
 
     /// @e M_invoke
-    // This function only used when we expect FnManager to help Fn
+    // This function only used when we expect FnManagerMoveOnly to help Fn
     // call the functor instead of FnInvoker.
     static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
@@ -1464,7 +1493,7 @@ namespace detail {
     >::type;
 
     template <typename Functor>
-    using MyManager = FnManager<RetType(ArgsType...), Functor, BufSize>;
+    using MyManager = FnManagerCopyable<RetType(ArgsType...), Functor, BufSize>;
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
     template <typename Functor>
@@ -1472,7 +1501,7 @@ namespace detail {
 #endif
 
     template <typename Functor>
-    using MyNonCopyable = FnNonCopyable<RetType(ArgsType...), Functor, BufSize>;
+    using MyMoveOnly = FnManagerMoveOnly<RetType(ArgsType...), Functor, BufSize>;
 
     template <typename Functor>
     using Callable = FnTraits::Callable<RetType, Functor, ArgsType...>;
@@ -1544,9 +1573,11 @@ namespace detail {
     }
 
     // Create an empty function wrapper.
+    /// @deprecated Creating an empty embed::Fn instance is risky.
     EMBED_INLINE Fn() noexcept = default;
 
     // Create an empty function wrapper.
+    /// @deprecated Creating an empty embed::Fn instance is risky.
     EMBED_INLINE Fn(std::nullptr_t) noexcept {}
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
@@ -1661,17 +1692,17 @@ namespace detail {
       static_assert(Fn::Callable<Functor>::value,
         "embed::Fn requires the Functor is callable and the Signature match RetType");
 
-      if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
+      if (Fn::MyMoveOnly<DecayFunctor>::M_not_empty_function(func))
       {
-        Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
+        Fn::MyMoveOnly<DecayFunctor>::M_init_functor(M_functor, std::move(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
         static_assert(
-          std::is_same<Manager_Type, decltype(&Fn::MyNonCopyable<DecayFunctor>::M_manager)>::value
+          std::is_same<Manager_Type, decltype(&Fn::MyMoveOnly<DecayFunctor>::M_manager)>::value
           && std::is_same<Invoker_Type, decltype(&Fn::MyInvoker<DecayFunctor>::M_invoke)>::value,
           "The library ensures that the types of the two are consistent."
         );
-        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
+        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyMoveOnly<DecayFunctor>::M_manager);
         M_invoker = reinterpret_cast<Invoker_Type>(&Fn::MyInvoker<DecayFunctor>::M_invoke);
       }
     }
@@ -1832,16 +1863,16 @@ namespace detail {
       static_assert(Fn::Callable<Functor>::value,
         "embed::Fn requires the Functor is callable and the Signature match RetType");
 
-      if (Fn::MyNonCopyable<DecayFunctor>::M_not_empty_function(func))
+      if (Fn::MyMoveOnly<DecayFunctor>::M_not_empty_function(func))
       {
-        Fn::MyNonCopyable<DecayFunctor>::M_init_functor(M_functor, std::move(func));
+        Fn::MyMoveOnly<DecayFunctor>::M_init_functor(M_functor, std::move(func));
 
         // To suppress the warnings of Arduino Uno, a forced type conversion is added here.
         static_assert(
-          std::is_same<Manager_Type, decltype(&Fn::MyNonCopyable<DecayFunctor>::M_manager)>::value,
+          std::is_same<Manager_Type, decltype(&Fn::MyMoveOnly<DecayFunctor>::M_manager)>::value,
           "The library ensures that the types of the two are consistent."
         );
-        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyNonCopyable<DecayFunctor>::M_manager);
+        M_manager = reinterpret_cast<Manager_Type>(&Fn::MyMoveOnly<DecayFunctor>::M_manager);
       }
     }
 # endif // !defined(EMBED_NO_NONCOPYABLE_FUNCTOR)
