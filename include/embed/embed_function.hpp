@@ -1542,7 +1542,7 @@ namespace detail {
    * @brief Help "embed::Fn" handle various different modifiers.
    */
   template <typename Signature, std::size_t>
-  struct FnModifierHelper
+  struct FnQualifierHelper
   {
     static_assert(
       std::is_void<FnToolBox::FnTraits::void_t<Signature>>::value /* always false */,
@@ -1550,9 +1550,9 @@ namespace detail {
       " And your signature format is incorrect.");
   };
 
-#define EMBED_FN_MODIFIER_HELPER_CODE(C, V, REF)                          \
+#define EMBED_FN_QUALIFIER_HELPER_CODE(C, V, REF)                         \
   template <typename RetType, std::size_t BufSize, typename... ArgsType>  \
-  struct FnModifierHelper<RetType(ArgsType...) C V REF, BufSize>          \
+  struct FnQualifierHelper<RetType(ArgsType...) C V REF, BufSize>         \
   {                                                                       \
     protected:                                                            \
     EMBED_FN_MODIFIER_HELPER_MAIN_BODY(C, V, REF)                         \
@@ -1587,8 +1587,8 @@ namespace detail {
 # endif
 
 
-  // Use macro to generate code. (Overload for `FnModifierHelper`)
-  EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_MODIFIER_HELPER_CODE)
+  // Use macro to generate code. (Overload for `FnQualifierHelper`)
+  EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_QUALIFIER_HELPER_CODE)
 
 # if defined(__clang__)
 #  pragma clang diagnostic pop
@@ -1598,7 +1598,7 @@ namespace detail {
 
 
 #undef EMBED_FN_GENERATE_CODE_C_V_REF
-#undef EMBED_FN_MODIFIER_HELPER_CODE
+#undef EMBED_FN_QUALIFIER_HELPER_CODE
 #undef EMBED_FN_MODIFIER_HELPER_MEMVARS
 #undef EMBED_FN_MODIFIER_HELPER_INVOKE_BODY
 #undef EMBED_FN_MODIFIER_HELPER_MAIN_BODY
@@ -1613,10 +1613,10 @@ namespace detail {
   template <typename Signature, std::size_t BufSize>
   class Fn
   : private detail::FnToolBox
-  , public detail::FnModifierHelper<Signature, BufSize>
+  , public detail::FnQualifierHelper<Signature, BufSize>
   {
   private:
-    using MyModifierHelper = detail::FnModifierHelper<Signature, BufSize>;
+    using MyQualifierHelper = detail::FnQualifierHelper<Signature, BufSize>;
 
     template <typename Functor>
     using DecayFunc_t = typename std::enable_if<
@@ -1625,35 +1625,35 @@ namespace detail {
     >::type;
 
     template <typename Functor>
-    using MyManager = typename MyModifierHelper::template Copyable<Functor>;
+    using MyManager = typename MyQualifierHelper::template Copyable<Functor>;
 
     template <typename Functor>
-    using MyMoveOnly = typename MyModifierHelper::template MoveOnly<Functor>;
+    using MyMoveOnly = typename MyQualifierHelper::template MoveOnly<Functor>;
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
     template <typename Functor>
-    using MyInvoker = typename MyModifierHelper::template Invoker<Functor>;
+    using MyInvoker = typename MyQualifierHelper::template Invoker<Functor>;
 #endif
 
-    using Invoker_Type = typename MyModifierHelper::Invoker_Type;
+    using Invoker_Type = typename MyQualifierHelper::Invoker_Type;
 
-    using Manager_Type = typename MyModifierHelper::Manager_Type;
+    using Manager_Type = typename MyQualifierHelper::Manager_Type;
 
     template <typename Functor>
-    using Callable = typename MyModifierHelper::template Callable<Functor>;
+    using Callable = typename MyQualifierHelper::template Callable<Functor>;
 
     // The `M_functor` store the callable object.
-    using MyModifierHelper::M_functor;
+    using MyQualifierHelper::M_functor;
 
     // The `M_manager` describes how to move / copy / destroy the `M_functor`,
     // and even describes how to invoke `M_functor` when not using `M_invoker`.
-    using MyModifierHelper::M_manager;
+    using MyQualifierHelper::M_manager;
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
     // invoker for the functor (func pointer)
     /// If @b EMBED_FN_NEED_FAST_CALL is not true, `M_manager` 
     /// will help Fn invoke functor instead of `M_invoker`.
-    using MyModifierHelper::M_invoker;
+    using MyQualifierHelper::M_invoker;
 #endif
 
     // ArgsPackage, RetType, and ArgsNum
