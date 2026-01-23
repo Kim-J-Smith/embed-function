@@ -1010,13 +1010,33 @@ namespace detail {
     template <typename Signature>
     struct get_unique_call_signature_impl;
 
-    template <typename Ret, typename Functor, typename... ArgsType>
-    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...)>
-    { using type = Ret(ArgsType...); };
+#define EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_IMPL(C, V, REF, NOEXC)\
+    template <typename Ret, typename Functor, typename... ArgsType>\
+    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) C V REF NOEXC>\
+    { using type = Ret(ArgsType...) C V REF; };
 
-    template <typename Ret, typename Functor, typename... ArgsType>
-    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const>
-    { using type = Ret(ArgsType...) const; };
+#define EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF(C, V, REF)\
+    EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_IMPL(C, V, REF, )
+
+#define EMBED_FN_GENERATE_CODE_C_V_REF(F_)  \
+    F_(, , )                                \
+    F_(const, , )                           \
+    F_(, volatile, )                        \
+    F_(, , &)                               \
+    F_(const, volatile, )                   \
+    F_(const, , &)                          \
+    F_(, volatile, &)                       \
+    F_(const, volatile, &)                  \
+    F_(, , &&)                              \
+    F_(const, , &&)                         \
+    F_(, volatile, &&)                      \
+    F_(const, volatile, &&)
+
+    // Overload the `get_unique_call_signature_impl` with different modifiers.
+    // (const / volatile / {& | &&})
+    EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF)
+
+#undef EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF
 
 #if EMBED_CXX_VERSION >= 201703L
 
@@ -1024,15 +1044,19 @@ namespace detail {
     // The noexcept-specification is a part of the function type and 
     // may appear as part of any function declarator. (Since C++17)
 
-    template <typename Ret, typename Functor, typename... ArgsType>
-    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) noexcept>
-    { using type = Ret(ArgsType...); };
+# define EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF(C, V, REF)\
+    EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_IMPL(C, V, REF, noexcept)
 
-    template <typename Ret, typename Functor, typename... ArgsType>
-    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const noexcept>
-    { using type = Ret(ArgsType...) const; };
+    // Overload the `get_unique_call_signature_impl` with different modifiers.
+    // (const / volatile / {& | &&} + noexcept)
+    EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF)
+
+# undef EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF
 
 #endif
+
+#undef EMBED_FN_GENERATE_CODE_C_V_REF
+#undef EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_IMPL
 
 #if ( __cpp_explicit_this_parameter >= 202110L ) || ( EMBED_CXX_VERSION >= 202302L )
 
@@ -1476,7 +1500,7 @@ namespace detail {
     }
   };
 
-#define EMBED_FN_MODIFIER_HELPER_MAIN_BODY                                                \
+#define EMBED_FN_MODIFIER_HELPER_MAIN_BODY(C, V, REF)                                     \
   template <typename Functor>                                                             \
   using Copyable = FnToolBox::FnManagerCopyable<RetType(ArgsType...), Functor, BufSize>;  \
   template <typename Functor>                                                             \
@@ -1486,7 +1510,7 @@ namespace detail {
   template <typename Functor>                                                             \
   using Callable = FnToolBox::FnTraits::Callable<RetType, Functor, ArgsType...>;          \
   using Invoker_Type = RetType (*)                                                        \
-    (const FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;                    \
+    (const V FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;                  \
   using Manager_Type = Invoker_Type (*) (FnFunctor<BufSize>&,                             \
     const FnFunctor<BufSize>&, FnToolBox::FunctorManagerOpCode) EMBED_CXX17_NOEXCEPT;
 
@@ -1495,22 +1519,22 @@ namespace detail {
   FnFunctor<BufSize>  M_functor{};        \
   Manager_Type        M_manager{};        \
   Invoker_Type        M_invoker{};
-# define EMBED_FN_MODIFIER_HELPER_INVOKE_BODY                                 \
-  if EMBED_LIKELY(this->M_invoker)                                            \
-    return this->M_invoker(this->M_functor, std::forward<ArgsType>(args)...); \
-  else                                                                        \
+# define EMBED_FN_MODIFIER_HELPER_INVOKE_BODY                     \
+  if EMBED_LIKELY(M_invoker)                                      \
+    return M_invoker(M_functor, std::forward<ArgsType>(args)...); \
+  else                                                            \
     detail::throw_bad_function_call_or_abort(); /* may not throw exception */
 #else
 # define EMBED_FN_MODIFIER_HELPER_MEMVARS \
   FnFunctor<BufSize>  M_functor{};        \
   Manager_Type        M_manager{};
-# define EMBED_FN_MODIFIER_HELPER_INVOKE_BODY                                   \
-  if EMBED_LIKELY(this->M_manager) {                                            \
-    detail::FnFunctor<BufSize> nil;                                             \
-    Invoker_Type invoker = this->M_manager(nil, nil, FnToolBox::OP_get_invoker);\
-    return invoker(this->M_functor, std::forward<ArgsType>(args)...);           \
-  }                                                                             \
-  else                                                                          \
+# define EMBED_FN_MODIFIER_HELPER_INVOKE_BODY                               \
+  if EMBED_LIKELY(M_manager) {                                              \
+    detail::FnFunctor<BufSize> nil;                                         \
+    Invoker_Type invoker = M_manager(nil, nil, FnToolBox::OP_get_invoker);  \
+    return invoker(M_functor, std::forward<ArgsType>(args)...);             \
+  }                                                                         \
+  else                                                                      \
     detail::throw_bad_function_call_or_abort(); /* may not throw exception */
 #endif
 
@@ -1531,7 +1555,7 @@ namespace detail {
   struct FnModifierHelper<RetType(ArgsType...) C V REF, BufSize>          \
   {                                                                       \
     protected:                                                            \
-    EMBED_FN_MODIFIER_HELPER_MAIN_BODY                                    \
+    EMBED_FN_MODIFIER_HELPER_MAIN_BODY(C, V, REF)                         \
     EMBED_FN_MODIFIER_HELPER_MEMVARS                                      \
     public:                                                               \
     EMBED_INLINE RetType operator() (ArgsType... args) C V REF            \
@@ -2218,9 +2242,9 @@ namespace detail {
   template <typename Class, typename RetType, typename... ArgsType>                           \
   EMBED_NODISCARD inline auto                                                                 \
   make_function(RetType (Class::* member_func) (ArgsType...) CONST_ VOLATILE_ REF_) noexcept  \
-  -> function<RetType(CONST_ VOLATILE_ Class&, ArgsType...), sizeof(member_func)> {           \
+  -> function<RetType(CONST_ VOLATILE_ Class&, ArgsType...) const, sizeof(member_func)> {     \
     return function<RetType(CONST_ VOLATILE_ Class&,                                          \
-      ArgsType...), sizeof(member_func)>(member_func);                                        \
+      ArgsType...) const, sizeof(member_func)>(member_func);                                  \
   }
 
   // Here, macros are used to overload the make_function, 
