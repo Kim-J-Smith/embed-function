@@ -1000,7 +1000,7 @@ namespace detail {
     struct is_similar_Fn
     {
       static constexpr bool value = 
-        ( aligned_buf_size<SelfBuf>::value >= aligned_buf_size<OtherBuf>::value )
+        ( aligned_buf_size<SelfBuf>::value == aligned_buf_size<OtherBuf>::value )
         && results_are_same<OtherRet, SelfRet>::value
         && ( SelfArgNum == OtherArgNum )
         && arguments_are_same<SelfArgs_package, OtherArgs_package, SelfArgNum>::value;
@@ -1136,21 +1136,96 @@ namespace detail {
 
 #undef EMBED_FN_GENERATE_CODE_C_V_REF
 
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_)         \
+    F_(, , , false, false, false, false)            \
+    F_(const, , , true, false, false, false)        \
+    F_(, volatile, , false, true, false, false)     \
+    F_(, , &, false, false, true, false)            \
+    F_(const, volatile, , true, true, false, false) \
+    F_(const, , &, true, false, true, false)        \
+    F_(, volatile, &, false, true, true, false)     \
+    F_(const, volatile, &, true, true, true, false) \
+    F_(, , &&, false, false, false, true)           \
+    F_(const, , &&, true, false, false, true)       \
+    F_(, volatile, &&, false, true, false, true)    \
+    F_(const, volatile, &&, true, true, false, true)
+
+    // qualifier_conv_safe_impl
+    template <typename Signature>
+    struct qualifier_conv_safe_impl;
+
+#define EMBED_FN_OVERLOAD_QUALIFIER_CONV_SAFE_IMPL(C, V, REF, IS_C, IS_V, IS_L, IS_R) \
+    template <typename Ret, typename... Args>                                         \
+    struct qualifier_conv_safe_impl<Ret(Args...) C V REF>                             \
+    {                                                                                 \
+      static constexpr bool is_const = IS_C;                                          \
+      static constexpr bool is_volatile = IS_V;                                       \
+      static constexpr bool is_lref = IS_L;                                           \
+      static constexpr bool is_rref = IS_R;                                           \
+    };
+
+    EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_QUALIFIER_CONV_SAFE_IMPL)
+
+#undef EMBED_FN_GENERATE_CODE_C_V_REF
+#undef EMBED_FN_OVERLOAD_QUALIFIER_CONV_SAFE_IMPL
+
+    // qualifier_conv_safe
+    /**
+     * +------------------+------------------+--------+
+     * |       from       |        to        |  safe  |
+     * +------------------+------------------+--------+
+     * |    non-const     |       const      |   No   |
+     * |      const       |    non-const     |   Yes  |
+     * |   non-volatile   |      volatile    |   Yes  |
+     * |      volatile    |   non-volatile   |   No   |
+     * |       non-&      |          &       |   Yes  |
+     * |          &       |       non-&      |   No   |
+     * |      non-&&      |         &&       |   Yes  |
+     * |         &&       |       non-&&     |   No   |
+     */
+    template <typename SigFrom, typename SigTo>
+    struct qualifier_conv_safe
+    {
+      static constexpr bool value = 
+        !(
+      (!qualifier_conv_safe_impl<SigFrom>::is_const && qualifier_conv_safe_impl<SigTo>::is_const)
+    ||(qualifier_conv_safe_impl<SigFrom>::is_volatile && !qualifier_conv_safe_impl<SigTo>::is_volatile)
+    ||(qualifier_conv_safe_impl<SigFrom>::is_lref && !qualifier_conv_safe_impl<SigTo>::is_lref)
+    ||(qualifier_conv_safe_impl<SigFrom>::is_rref && !qualifier_conv_safe_impl<SigTo>::is_rref)
+        );
+    };
+
+
+    // is_similar_Fn_signature
+    template <typename SelfSig, typename OtherSig, std::size_t SelfSize, std::size_t OtherSize>
+    struct is_similar_Fn_signature
+    {
+      using SelfRet     = typename unwrap_signature<SelfSig>::ret;
+      using SelfArgs    = typename unwrap_signature<SelfSig>::args;
+      static constexpr std::size_t SelfArgNum = unwrap_signature<SelfSig>::arg_num;
+      using OtherRet     = typename unwrap_signature<OtherSig>::ret;
+      using OtherArgs    = typename unwrap_signature<OtherSig>::args;
+      static constexpr std::size_t OtherArgNum = unwrap_signature<OtherSig>::arg_num;
+
+      static constexpr bool value = 
+        is_similar_Fn<
+          SelfRet, SelfArgs, SelfArgNum, SelfSize,
+          OtherRet, OtherArgs, OtherArgNum, OtherSize
+        >::value 
+        && qualifier_conv_safe<OtherSig, SelfSig>::value;
+    };
+
     /// @e is_Fn_and_similar
     template <typename Signature, typename Functor>
     struct is_Fn_and_similar
     : public std::false_type { };
 
     template <typename Signature,
-      typename OtherRet, std::size_t BufSize, typename... OtherArgs>
-    struct is_Fn_and_similar<Signature, Fn<OtherRet(OtherArgs...), BufSize>>
+      typename OtherSignature, std::size_t BufSize>
+    struct is_Fn_and_similar<Signature, Fn<OtherSignature, BufSize>>
     {
-      static constexpr bool value = is_similar_Fn<
-          typename unwrap_signature<Signature>::ret,
-          typename unwrap_signature<Signature>::args,
-          unwrap_signature<Signature>::arg_num,
-          BufSize, OtherRet, args_package<OtherArgs...>,
-          sizeof... (OtherArgs), BufSize
+      static constexpr bool value = is_similar_Fn_signature<
+          Signature, OtherSignature, BufSize, BufSize
         >::value;
     };
 
@@ -1745,16 +1820,12 @@ namespace detail {
     // Construct Fn<Sig_A> with Fn<Sig_B>
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
     // `Sig_A.args` are same with `Sig_B.args`.
-    template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
+    template <typename OtherSignature, std::size_t OtherSize>
     Fn(
-      const Fn<OtherRet(OtherArgs...), OtherSize>& fn,
-      typename std::enable_if<
-        FnTraits::is_similar_Fn<
-          RetType, ArgsPackage, ArgsNum, BufSize,
-          OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
-        >::value,
-        bool
-      >::type = true
+      const Fn<OtherSignature, OtherSize>& fn,
+      typename std::enable_if<FnTraits::is_Fn_and_similar<
+        Signature, Fn<OtherSignature, OtherSize>
+      >::value, bool>::type = true
     ) noexcept {
       if (static_cast<bool>(fn))
       {
@@ -1781,6 +1852,9 @@ namespace detail {
      */
     template <typename Functor,
       typename DecayFunctor = Fn::DecayFunc_t<Functor>,
+      typename = typename std::enable_if<!FnTraits::is_Fn_and_similar<
+        Signature, FnTraits::remove_cvref_t<Functor>
+      >::value>::type,
       typename = FnTraits::disableIf_movable_and_non_copyable_and_nref_t<Functor> >
     Fn(Functor&& func) noexcept
     {
@@ -1818,6 +1892,9 @@ namespace detail {
     template <typename Functor,
       typename DecayFunctor = Fn::DecayFunc_t<Functor>,
       typename = FnTraits::enableIf_movable_and_non_copyable_t<DecayFunctor>,
+      typename = typename std::enable_if<!FnTraits::is_Fn_and_similar<
+        Signature, FnTraits::remove_cvref_t<Functor>
+      >::value>::type,
       typename = typename std::enable_if<!std::is_reference<Functor>::value>::type >
     Fn(Functor&& func)
     {
@@ -1908,16 +1985,12 @@ namespace detail {
     // Construct Fn<Sig_A> with Fn<Sig_B>
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
     // `Sig_A.args` are same with `Sig_B.args`.
-    template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
+    template <typename OtherSignature, std::size_t OtherSize>
     Fn(
-      const Fn<OtherRet(OtherArgs...), OtherSize>& fn,
-      typename std::enable_if<
-        FnTraits::is_similar_Fn<
-          RetType, ArgsPackage, ArgsNum, BufSize,
-          OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
-        >::value,
-        bool
-      >::type = true
+      const Fn<OtherSignature, OtherSize>& fn,
+      typename std::enable_if<FnTraits::is_Fn_and_similar<
+        Signature, Fn<OtherSignature, OtherSize>
+      >::value, bool>::type = true
     ) noexcept {
       if (static_cast<bool>(fn))
       {
@@ -1943,6 +2016,9 @@ namespace detail {
      */
     template <typename Functor,
       typename DecayFunctor = Fn::DecayFunc_t<Functor>,
+      typename = typename std::enable_if<!FnTraits::is_Fn_and_similar<
+        Signature, FnTraits::remove_cvref_t<Functor>
+      >::value>::type,
       typename = FnTraits::disableIf_movable_and_non_copyable_and_nref_t<Functor> >
     Fn(Functor&& func) noexcept
     {
@@ -1978,6 +2054,9 @@ namespace detail {
     template <typename Functor,
       typename DecayFunctor = Fn::DecayFunc_t<Functor>,
       typename = FnTraits::enableIf_movable_and_non_copyable_t<DecayFunctor>,
+      typename = typename std::enable_if<!FnTraits::is_Fn_and_similar<
+        Signature, FnTraits::remove_cvref_t<Functor>
+      >::value>::type,
       typename = typename std::enable_if<!std::is_reference<Functor>::value>::type >
     Fn(Functor&& func)
     {
@@ -2055,17 +2134,12 @@ namespace detail {
 
     /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
-    template <typename RetT, std::size_t OtherBufSize, typename... ArgsT>
-    EMBED_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
-    noexcept(
-      std::enable_if<
-        FnTraits::is_similar_Fn<
-          RetType, ArgsPackage, ArgsNum, BufSize,
-          RetT, FnTraits::args_package<ArgsT...>, sizeof...(ArgsT), OtherBufSize
-        >::value,
-        std::true_type
-      >::type::value
-    ) {
+    template <typename OtherSignature, std::size_t OtherSize,
+      typename = typename std::enable_if<FnTraits::is_Fn_and_similar<
+        Signature, Fn<OtherSignature, OtherSize>
+      >::value>::type>
+    EMBED_INLINE Fn& operator=(const Fn<OtherSignature, OtherSize>& fn) noexcept 
+    {
       Fn(fn).swap(*this);
       return *this;
     }
@@ -2073,7 +2147,10 @@ namespace detail {
     /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     template <typename Functor,
-      typename DecayFunc = Fn::DecayFunc_t<Functor> >
+      typename DecayFunc = Fn::DecayFunc_t<Functor>,
+      typename = typename std::enable_if<!FnTraits::is_Fn_and_similar<
+        Signature, FnTraits::remove_cvref_t<Functor>
+      >::value>::type>
     EMBED_INLINE Fn& operator=(Functor&& func) noexcept
     {
       Fn(std::forward<Functor>(func)).swap(*this);
@@ -2210,18 +2287,14 @@ namespace detail {
   }
 
   // Overload for `embed::Fn<Other, Size>`.
-  template <typename Signature, typename OtherRet, std::size_t BufSize, typename... OtherArgs>
+  template <typename Signature, typename OtherSignature, std::size_t BufSize>
   EMBED_NODISCARD inline typename std::enable_if<
-    detail::FnToolBox::FnTraits::is_similar_Fn<
-      typename detail::FnToolBox::FnTraits::unwrap_signature<Signature>::ret,
-      typename detail::FnToolBox::FnTraits::unwrap_signature<Signature>::args,
-      detail::FnToolBox::FnTraits::unwrap_signature<Signature>::arg_num,
-      BufSize, OtherRet, detail::FnToolBox::FnTraits::args_package<OtherArgs...>,
-      sizeof... (OtherArgs), BufSize
+    detail::FnToolBox::FnTraits::is_similar_Fn_signature<
+      Signature, OtherSignature, BufSize, BufSize
     >::value,
     function<Signature, BufSize>
   >::type
-  make_function(const Fn<OtherRet(OtherArgs...), BufSize>& fn) noexcept
+  make_function(const Fn<OtherSignature, BufSize>& fn) noexcept
   {
     return function<Signature, BufSize>(fn);
   }
