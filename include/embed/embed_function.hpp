@@ -1016,7 +1016,7 @@ namespace detail {
 
     template <typename Ret, typename Functor, typename... ArgsType>
     struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const>
-    { using type = Ret(ArgsType...); };
+    { using type = Ret(ArgsType...) const; };
 
 #if EMBED_CXX_VERSION >= 201703L
 
@@ -1030,7 +1030,7 @@ namespace detail {
 
     template <typename Ret, typename Functor, typename... ArgsType>
     struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const noexcept>
-    { using type = Ret(ArgsType...); };
+    { using type = Ret(ArgsType...) const; };
 
 #endif
 
@@ -1562,9 +1562,8 @@ namespace detail {
 #  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 # endif
 
-  /**
-   * 
-   */
+
+  // Use macro to generate code. (Overload for `FnModifierHelper`)
   EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_MODIFIER_HELPER_CODE)
 
 # if defined(__clang__)
@@ -1602,14 +1601,14 @@ namespace detail {
     >::type;
 
     template <typename Functor>
-    using MyManager = typename MyModifierHelper::Copyable<Functor>;
+    using MyManager = typename MyModifierHelper::template Copyable<Functor>;
 
     template <typename Functor>
-    using MyMoveOnly = typename MyModifierHelper::MoveOnly<Functor>;
+    using MyMoveOnly = typename MyModifierHelper::template MoveOnly<Functor>;
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
     template <typename Functor>
-    using MyInvoker = typename MyModifierHelper::Invoker<Functor>;
+    using MyInvoker = typename MyModifierHelper::template Invoker<Functor>;
 #endif
 
     using Invoker_Type = typename MyModifierHelper::Invoker_Type;
@@ -1617,17 +1616,23 @@ namespace detail {
     using Manager_Type = typename MyModifierHelper::Manager_Type;
 
     template <typename Functor>
-    using Callable = typename MyModifierHelper::Callable<Functor>;
+    using Callable = typename MyModifierHelper::template Callable<Functor>;
 
+    // The `M_functor` store the callable object.
     using MyModifierHelper::M_functor;
 
+    // The `M_manager` describes how to move / copy / destroy the `M_functor`,
+    // and even describes how to invoke `M_functor` when not using `M_invoker`.
     using MyModifierHelper::M_manager;
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
+    // invoker for the functor (func pointer)
+    /// If @b EMBED_FN_NEED_FAST_CALL is not true, `M_manager` 
+    /// will help Fn invoke functor instead of `M_invoker`.
     using MyModifierHelper::M_invoker;
 #endif
 
-    // ArgsType RetType and ArgsNum
+    // ArgsPackage, RetType, and ArgsNum
     using ArgsPackage   = typename          FnTraits::unwrap_signature<Signature>::args;
     using RetType       = typename          FnTraits::unwrap_signature<Signature>::ret;
     static constexpr std::size_t ArgsNum =  FnTraits::unwrap_signature<Signature>::arg_num;
@@ -2132,10 +2137,10 @@ namespace detail {
 
   // Overload for free function.
   template <typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline function<RetType(ArgsType...)>
+  EMBED_NODISCARD inline function<RetType(ArgsType...) const>
   make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
   {
-    return function<RetType(ArgsType...)>(func);
+    return function<RetType(ArgsType...) const>(func);
   }
 
   // Overload for free function with specified signature.
