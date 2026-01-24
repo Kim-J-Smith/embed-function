@@ -2353,7 +2353,11 @@ namespace detail {
   F_(const, volatile, )                     \
   F_(const, , &)                            \
   F_(, volatile, &)                         \
-  F_(const, volatile, &)
+  F_(const, volatile, &)                    \
+  F_(, , &&)                                \
+  F_(const, , &&)                           \
+  F_(, volatile, &&)                        \
+  F_(const, volatile, &&)
 
   // Overload for member function.
 # define EMBED_FN_OVERLOAD_MEMBER_FUNCTION(CONST_, VOLATILE_, REF_)                           \
