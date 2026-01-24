@@ -1632,6 +1632,14 @@ namespace detail {
   using Manager_Type = Invoker_Type (*) (V FnFunctor<BufSize>&,                           \
     const V FnFunctor<BufSize>&, FnToolBox::FunctorManagerOpCode) EMBED_CXX17_NOEXCEPT;
 
+# if defined(__clang__)
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wuninitialized"
+# elif defined(__GNUC__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+# endif
+
 #if ( EMBED_FN_NEED_FAST_CALL == true )
 # define EMBED_FN_MODIFIER_HELPER_MEMVARS \
   FnFunctor<BufSize>  M_functor{};        \
@@ -1695,15 +1703,6 @@ namespace detail {
   F_(const, , &&)                           \
   F_(, volatile, &&)                        \
   F_(const, volatile, &&)
-
-# if defined(__clang__)
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Wuninitialized"
-# elif defined(__GNUC__)
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-# endif
-
 
   // Use macro to generate code. (Overload for `FnQualifierHelper`)
   EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_QUALIFIER_HELPER_CODE)
