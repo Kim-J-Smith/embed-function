@@ -134,6 +134,9 @@ SOFTWARE.
 // will be invoked for handling. This function can be customized by the user.
 #define EMBED_FN_ENSURE_NO_THROW    true
 
+// Disable the warnings of embed::Fn
+#define EMBED_FN_NO_WARING          false
+
 ////////////////////////////////////////////////////////////////
 
 
@@ -178,7 +181,7 @@ SOFTWARE.
 #endif
 
 /// @brief warning if exception is enabled.
-#if !EMBED_NO_WARNING
+#if ( !EMBED_NO_WARNING ) && ( !EMBED_FN_NO_WARING )
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  if defined(_MSC_VER)
 #   pragma message(__FILE__ " [WARNING]: You are using c++ exception, which may consume more ROM.\
@@ -2425,6 +2428,7 @@ namespace std EMBED_ABI_VISIBILITY(default)
 #undef EMBED_FN_NOTHROW_CALLABLE
 #undef EMBED_FN_CASE_NOEXCEPT
 #undef EMBED_FN_ENSURE_NO_THROW
+#undef EMBED_FN_NO_WARING
 
 #if defined(_MSC_VER)
 # pragma warning(pop)
