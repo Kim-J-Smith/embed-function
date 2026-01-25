@@ -1297,6 +1297,7 @@ namespace detail {
   /**
    * @brief The Base of @c FnToolBox::FnManagerCopyable
    *                and @c FnToolBox::FnManagerMoveOnly
+   * @note Here `is_volatile` = false
    */
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
   struct FnToolBox::FnManagerHelper<
@@ -1382,6 +1383,7 @@ namespace detail {
   };
 
   /// @brief Overload for 'volatile'
+  /// @note Here `is_volatile` = true
   template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
   struct FnToolBox::FnManagerHelper<
     RetType(ArgsType...), Functor, BufSize, /* is_volatile = */ true>
