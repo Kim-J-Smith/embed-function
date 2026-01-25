@@ -1156,13 +1156,13 @@ namespace detail {
     F_(, volatile, &&, false, true, false, true)    \
     F_(const, volatile, &&, true, true, false, true)
 
-    // qualifier_conv_safe_impl
+    // get_signature_qualifier
     template <typename Signature>
-    struct qualifier_conv_safe_impl;
+    struct get_signature_qualifier;
 
-#define EMBED_FN_OVERLOAD_QUALIFIER_CONV_SAFE_IMPL(C, V, REF, IS_C, IS_V, IS_L, IS_R) \
+#define EMBED_FN_OVERLOAD_GET_SIGNATURE_QUALIFIER(C, V, REF, IS_C, IS_V, IS_L, IS_R)  \
     template <typename Ret, typename... Args>                                         \
-    struct qualifier_conv_safe_impl<Ret(Args...) C V REF>                             \
+    struct get_signature_qualifier<Ret(Args...) C V REF>                              \
     {                                                                                 \
       static constexpr bool is_const = IS_C;                                          \
       static constexpr bool is_volatile = IS_V;                                       \
@@ -1172,10 +1172,10 @@ namespace detail {
 
     // Use the macro to generate code for different kinds of signature.
     // (const / volatile / {& | &&})
-    EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_QUALIFIER_CONV_SAFE_IMPL)
+    EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_GET_SIGNATURE_QUALIFIER)
 
 #undef EMBED_FN_GENERATE_CODE_C_V_REF
-#undef EMBED_FN_OVERLOAD_QUALIFIER_CONV_SAFE_IMPL
+#undef EMBED_FN_OVERLOAD_GET_SIGNATURE_QUALIFIER
 
     // qualifier_conv_safe
     /**
@@ -1196,10 +1196,10 @@ namespace detail {
     {
       static constexpr bool value = 
         !(
-      (!qualifier_conv_safe_impl<SigFrom>::is_const && qualifier_conv_safe_impl<SigTo>::is_const)
-    ||(qualifier_conv_safe_impl<SigFrom>::is_volatile && !qualifier_conv_safe_impl<SigTo>::is_volatile)
-    ||(qualifier_conv_safe_impl<SigFrom>::is_lref && !qualifier_conv_safe_impl<SigTo>::is_lref)
-    ||(qualifier_conv_safe_impl<SigFrom>::is_rref && !qualifier_conv_safe_impl<SigTo>::is_rref)
+      (!get_signature_qualifier<SigFrom>::is_const && get_signature_qualifier<SigTo>::is_const)
+    ||(get_signature_qualifier<SigFrom>::is_volatile && !get_signature_qualifier<SigTo>::is_volatile)
+    ||(get_signature_qualifier<SigFrom>::is_lref && !get_signature_qualifier<SigTo>::is_lref)
+    ||(get_signature_qualifier<SigFrom>::is_rref && !get_signature_qualifier<SigTo>::is_rref)
         );
     };
 
