@@ -1143,7 +1143,7 @@ namespace detail {
     /// @e unwrap_signature
     template <typename Signature> struct unwrap_signature
     {
-      static_assert(std::is_void<void_t<Signature>>::value,
+      static_assert(!std::is_void<void_t<Signature>>::value, /* always false */
         "The Signature must be like `Ret(Args...) [const | volatile | &]`."
         " And your signature format is incorrect.");
     };
@@ -1735,7 +1735,7 @@ namespace detail {
   struct FnQualifierHelper
   {
     static_assert(
-      std::is_void<FnToolBox::FnTraits::void_t<Signature>>::value /* always false */,
+      !std::is_void<FnToolBox::FnTraits::void_t<Signature>>::value /* always false */,
       "The Signature must be like `Ret(Args...) [const | volatile | &]`."
       " And your signature format is incorrect.");
   };
