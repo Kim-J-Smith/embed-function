@@ -500,26 +500,30 @@ namespace detail {
     /// @c FnTraits is aimed to provide these traits.
     struct FnTraits;
 
-    // embed::Fn will forget the type of Functor
-    /// @c FnManagerCopyable is aimed to remember the type, 
-    /// help Fn manage copyable functor.
-    template <typename Signature, typename Functor, std::size_t BufSize, bool is_volatile>
-    struct FnManagerCopyable;
-
     /// @c FnInvoker is aimed to help Fn call the functor.
     /// When @b EMBED_FN_NEED_FAST_CALL is false, 
     /// @c FnManagerCopyable, @c FnManagerMoveOnly
     /// will help Fn call the functor instead of FnInvoker,
     /// which will save the RAM, but is slower than FnInvoker.
-    template <typename Signature, typename Functor, std::size_t BufSize, bool is_volatile>
+    template <typename Signature, typename Functor,
+      std::size_t BufSize, bool Is_volatile, bool Is_rref>
     struct FnInvoker;
+
+    // embed::Fn will forget the type of Functor
+    /// @c FnManagerCopyable is aimed to remember the type, 
+    /// help Fn manage copyable functor.
+    template <typename Signature, typename Functor,
+      std::size_t BufSize, bool Is_volatile, bool Is_rref>
+    struct FnManagerCopyable;
 
     // embed::Fn need to wrap non-copyable callable object.
     /// @c FnManagerMoveOnly is aimed to help Fn manage move-only functor.
-    template <typename Signature, typename Functor, std::size_t BufSize, bool is_volatile>
+    template <typename Signature, typename Functor,
+      std::size_t BufSize, bool Is_volatile, bool Is_rref>
     struct FnManagerMoveOnly;
 
-    template <typename Signature, typename Functor, std::size_t BufSize, bool is_volatile>
+    template <typename Signature, typename Functor,
+      std::size_t BufSize, bool Is_volatile, bool Is_rref>
     struct FnManagerHelper;
   };
 
@@ -833,10 +837,14 @@ namespace detail {
     /// @e Callable
     template <typename RetT, typename Functor, typename... ArgsT>
     struct Callable
-    : public is_invocable_impl<
-      invoke_result<typename std::decay<Functor>::type&, ArgsT...>, RetT
-    >::type
-    {
+    : public std::integral_constant<bool,
+      is_invocable_impl<
+        invoke_result<typename std::decay<Functor>::type&, ArgsT...>, RetT
+      >::type::value
+      || is_invocable_impl<
+        invoke_result<typename std::decay<Functor>::type&&, ArgsT...>, RetT
+      >::type::value
+    > {
       using Caller = typename std::decay<Functor>::type&;
       using Result = invoke_result<Caller, ArgsT...>;
 
@@ -1204,6 +1212,7 @@ namespace detail {
      * |          &       |       non-&      |   No   |
      * |      non-&&      |         &&       |   Yes  |
      * |         &&       |       non-&&     |   No   |
+     * +------------------+------------------+--------+
      */
     template <typename SigFrom, typename SigTo>
     struct qualifier_conv_safe
@@ -1373,20 +1382,28 @@ namespace detail {
   /**
    * @c FnToolBox::FnInvoker
    * @brief Invoke the functor for Fn.
-   * @note Is_volatile = false
    */
   template <typename RetType, typename Functor, std::size_t BufSize, 
-    typename... ArgsType>
+    bool Is_volatile, bool Is_rref, typename... ArgsType>
   struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor,
-    BufSize, /* Is_volatile = */ false>
+    BufSize, Is_volatile, Is_rref>
   {
   private:
-    using FnFunctor_Qualifier = FnFunctor<BufSize>;
+    using FnFunctor_Qualifier = typename std::conditional<
+      Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
+    >::type;
+    using Func_Qualifier = typename std::conditional<
+      Is_volatile, volatile Functor, Functor
+    >::type;
+    using FnFunctor_Cast = typename std::conditional<
+      Is_rref, typename std::remove_reference<Functor>::type&&,
+      typename std::remove_reference<Functor>::type&
+    >::type;
 
     static EMBED_INLINE Functor*
     M_get_pointer(const FnFunctor_Qualifier& src) noexcept
     {
-      const Functor& fn = src.template M_access<Functor>();
+      const Func_Qualifier& fn = src.template M_access<Functor>();
       return const_cast<Functor*>(std::addressof(fn));
     }
   public:
@@ -1394,33 +1411,8 @@ namespace detail {
     static RetType M_invoke(const FnFunctor_Qualifier& functor, ArgsType&&... args)
     EMBED_FN_CASE_NOEXCEPT
     {
-      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
-        std::forward<ArgsType>(args)...);
-    }
-
-  };
-
-  /// @brief Overload @c FnToolBox::FnInvoker for Is_volatile = true
-  template <typename RetType, typename Functor, std::size_t BufSize, 
-    typename... ArgsType>
-  struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor,
-    BufSize, /* Is_volatile = */ true>
-  {
-  private:
-    using FnFunctor_Qualifier = volatile FnFunctor<BufSize>;
-
-    static EMBED_INLINE Functor*
-    M_get_pointer(const FnFunctor_Qualifier& src) noexcept
-    {
-      const volatile Functor& fn = src.template M_access<Functor>();
-      return const_cast<Functor*>(std::addressof(fn));
-    }
-  public:
-
-    static RetType M_invoke(const FnFunctor_Qualifier& functor, ArgsType&&... args)
-    EMBED_FN_CASE_NOEXCEPT
-    {
-      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
+      return FnTraits::invoke_r<RetType>(
+        static_cast<FnFunctor_Cast>(*M_get_pointer(functor)),
         std::forward<ArgsType>(args)...);
     }
 
@@ -1430,15 +1422,27 @@ namespace detail {
   /**
    * @brief The Base of @c FnToolBox::FnManagerCopyable
    *                and @c FnToolBox::FnManagerMoveOnly
-   * @note Here `is_volatile` = false
    */
-  template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
+  template <typename RetType, typename Functor, std::size_t BufSize,
+    bool Is_volatile, bool Is_rref, typename... ArgsType>
   struct FnToolBox::FnManagerHelper<
-    RetType(ArgsType...), Functor, BufSize, /* is_volatile = */ false>
+    RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>
   {
+  private:
+    using FnFunctor_Qualifier = typename std::conditional<
+      Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
+    >::type;
+    using Func_Qualifier = typename std::conditional<
+      Is_volatile, volatile Functor, Functor
+    >::type;
+    using FnFunctor_Cast = typename std::conditional<
+      Is_rref, typename std::remove_reference<Functor>::type&&,
+      typename std::remove_reference<Functor>::type&
+    >::type;
+
   public:
     /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
+    using Invoker_Type = RetType (*) (const FnFunctor_Qualifier&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
 
   protected:
     /// @e M_create
@@ -1446,13 +1450,14 @@ namespace detail {
     /// A: Because this is Perfect Forwarding, so compiler need to
     /// deduce the type of `Func`, rather than explicitly specifying it.
     template <typename Func>
-    static void M_create(FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    static void M_create(FnFunctor_Qualifier& dest, Func&& functor) noexcept
     {
-      ::new (dest.M_access()) Functor(std::forward<Func>(functor));
+      ::new (const_cast<void*>(dest.M_access()))
+        Functor(std::forward<Func>(functor));
     }
 
     /// @e M_destroy
-    static void M_destroy(FnFunctor<BufSize>& victim) noexcept
+    static void M_destroy(FnFunctor_Qualifier& victim) noexcept
     {
       victim.template M_access<Functor>().~Functor();
     }
@@ -1469,9 +1474,9 @@ namespace detail {
      * that the underlying object is non-const to ensure safety.
      */
     static Functor*
-    M_get_pointer(const FnFunctor<BufSize>& src) noexcept
+    M_get_pointer(const FnFunctor_Qualifier& src) noexcept
     {
-      const Functor& fn = src.template M_access<Functor>();
+      const Func_Qualifier& fn = src.template M_access<Functor>();
       return const_cast<Functor*>(std::addressof(fn));
     }
 
@@ -1480,74 +1485,6 @@ namespace detail {
     static bool M_not_empty_function(const Fn<Signature, Size>& f) noexcept
     { return static_cast<bool>(f); }
 
-    template <typename T>
-    static bool M_not_empty_function(T* fp) noexcept
-    { return fp != nullptr; }
-
-    template <typename Class, typename T>
-    static bool M_not_empty_function(T Class::* mp) noexcept
-    { return mp != nullptr; }
-
-    template <typename T>
-    static bool M_not_empty_function(const T&) noexcept
-    { return true; }
-
-    /// @e M_init_functor
-    // init functor by using M_create (perfect forward)
-    template <typename Func>
-    static void M_init_functor(FnFunctor<BufSize>& dest, Func&& functor) noexcept
-    {
-      M_create(dest, std::forward<Func>(functor));
-    }
-
-#if ( EMBED_FN_NEED_FAST_CALL == false )
-
-    /// @e M_invoke
-    // This function only used when we expect FnManagerCopyable to help Fn
-    // call the functor instead of FnInvoker.
-    static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
-    noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
-    {
-      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
-        std::forward<ArgsType>(args)...);
-    }
-
-#endif
-  };
-
-  /// @brief Overload for 'volatile'
-  /// @note Here `is_volatile` = true
-  template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct FnToolBox::FnManagerHelper<
-    RetType(ArgsType...), Functor, BufSize, /* is_volatile = */ true>
-  {
-  public:
-    using Invoker_Type = 
-      RetType (*) (const volatile FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
-
-  protected:
-    /// @e M_create
-    template <typename Func>
-    static void M_create(volatile FnFunctor<BufSize>& dest, Func&& functor) noexcept
-    {
-      ::new (const_cast<void*>(dest.M_access())) Functor(std::forward<Func>(functor));
-    }
-
-    /// @e M_destroy
-    static void M_destroy(volatile FnFunctor<BufSize>& victim) noexcept
-    {
-      victim.template M_access<Functor>().~Functor();
-    }
-
-  public:
-    static Functor*
-    M_get_pointer(const volatile FnFunctor<BufSize>& src) noexcept
-    {
-      const volatile Functor& fn = src.template M_access<Functor>();
-      return const_cast<Functor*>(std::addressof(fn));
-    }
-
-    /// @e M_not_empty_function
     template <typename Signature, std::size_t Size>
     static bool M_not_empty_function(const volatile Fn<Signature, Size>& f) noexcept
     { return static_cast<bool>(f); }
@@ -1567,7 +1504,7 @@ namespace detail {
     /// @e M_init_functor
     // init functor by using M_create (perfect forward)
     template <typename Func>
-    static void M_init_functor(volatile FnFunctor<BufSize>& dest, Func&& functor) noexcept
+    static void M_init_functor(FnFunctor_Qualifier& dest, Func&& functor) noexcept
     {
       M_create(dest, std::forward<Func>(functor));
     }
@@ -1577,10 +1514,11 @@ namespace detail {
     /// @e M_invoke
     // This function only used when we expect FnManagerCopyable to help Fn
     // call the functor instead of FnInvoker.
-    static RetType M_invoke(const volatile FnFunctor<BufSize>& functor, ArgsType&&... args)
+    static RetType M_invoke(const FnFunctor_Qualifier& functor, ArgsType&&... args)
     noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
     {
-      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
+      return FnTraits::invoke_r<RetType>(
+        static_cast<FnFunctor_Cast>(*M_get_pointer(functor)),
         std::forward<ArgsType>(args)...);
     }
 
@@ -1593,10 +1531,11 @@ namespace detail {
    * @brief Manage the functor for embed::Fn.
    */
   template <typename RetType, typename Functor, std::size_t BufSize,
-    bool Is_volatile, typename... ArgsType>
+    bool Is_volatile, bool Is_rref, typename... ArgsType>
   struct FnToolBox::FnManagerCopyable<
-    RetType(ArgsType...), Functor, BufSize, Is_volatile>
-  : public FnToolBox::FnManagerHelper<RetType(ArgsType...), Functor, BufSize, Is_volatile>
+    RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>
+  : public FnToolBox::FnManagerHelper<
+    RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>
   {
   public:
     constexpr static std::size_t M_max_size = sizeof(FnBufType<BufSize>);
@@ -1626,7 +1565,8 @@ namespace detail {
       "embed::Fn requires the functor to fit in `BufSize` and"
       " have valid alignment (adjust `BufSize` if needed)");
 
-    using Base = FnManagerHelper<RetType(ArgsType...), Functor, BufSize, Is_volatile>;
+    using Base = FnManagerHelper<
+      RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>;
     using FnFunctor_Qualifier = typename std::conditional<
       Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
     >::type;
@@ -1676,10 +1616,11 @@ namespace detail {
    * @brief Manager non-copyable objects.
    */
   template <typename RetType, typename Functor, std::size_t BufSize, 
-    bool Is_volatile, typename... ArgsType>
+    bool Is_volatile, bool Is_rref, typename... ArgsType>
   struct FnToolBox::FnManagerMoveOnly<
-    RetType(ArgsType...), Functor, BufSize, Is_volatile>
-  : public FnToolBox::FnManagerHelper<RetType(ArgsType...), Functor, BufSize, Is_volatile>
+    RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>
+  : public FnToolBox::FnManagerHelper<
+    RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>
   {
   public:
     constexpr static std::size_t M_max_size = sizeof(FnBufType<BufSize>);
@@ -1709,7 +1650,8 @@ namespace detail {
       "embed::Fn requires the functor to fit in `BufSize` and"
       " have valid alignment (adjust `BufSize` if needed)");
 
-    using Base = FnManagerHelper<RetType(ArgsType...), Functor, BufSize, Is_volatile>;
+    using Base = FnManagerHelper<
+      RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>;
     using FnFunctor_Qualifier = typename std::conditional<
       Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
     >::type;
@@ -1756,13 +1698,16 @@ namespace detail {
 #define EMBED_FN_MODIFIER_HELPER_MAIN_BODY(C, V, REF)                                     \
   template <typename Functor>                                                             \
   using Copyable = FnToolBox::FnManagerCopyable<RetType(ArgsType...),                     \
-    Functor, BufSize, std::is_volatile<V int>::value>;                                    \
+    Functor, BufSize, std::is_volatile<V int>::value,                                     \
+    std::is_rvalue_reference<int REF>::value>;                                            \
   template <typename Functor>                                                             \
   using MoveOnly = FnToolBox::FnManagerMoveOnly<RetType(ArgsType...),                     \
-    Functor, BufSize, std::is_volatile<V int>::value>;                                    \
+    Functor, BufSize, std::is_volatile<V int>::value,                                     \
+    std::is_rvalue_reference<int REF>::value>;                                            \
   template <typename Functor>                                                             \
   using Invoker = FnToolBox::FnInvoker<RetType(ArgsType...),                              \
-  Functor, BufSize, std::is_volatile<V int>::value>;                                      \
+    Functor, BufSize, std::is_volatile<V int>::value,                                     \
+    std::is_rvalue_reference<int REF>::value>;                                            \
   template <typename Functor>                                                             \
   using Callable = FnToolBox::FnTraits::Callable<RetType, Functor, ArgsType...>;          \
   using Invoker_Type = RetType (*)                                                        \
