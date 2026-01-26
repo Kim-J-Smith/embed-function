@@ -97,12 +97,6 @@ SOFTWARE.
  * 
  *  embed::Fn fn = callable_class{...}; // require C++17 template deduce guide
  * 
- * TODO:
- * 
- *  1. Support the use of "const", "volatile", "&", "&&" etc. to modify the function signature.
- * 
- *  2. Support member functions that are "&&"-marked for packaging.
- * 
  */
 
 /// @c C++11 "embed_function.hpp"
@@ -358,6 +352,21 @@ namespace embed { namespace detail {
 
 } } // end namespace embed::detail
 ////////////////////////////////////////////////////////////////
+
+// Helper macro to generate overlaod code.
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
+  F_(, , )                                  \
+  F_(const, , )                             \
+  F_(, volatile, )                          \
+  F_(, , &)                                 \
+  F_(const, volatile, )                     \
+  F_(const, , &)                            \
+  F_(, volatile, &)                         \
+  F_(const, volatile, &)                    \
+  F_(, , &&)                                \
+  F_(const, , &&)                           \
+  F_(, volatile, &&)                        \
+  F_(const, volatile, &&)
 
 namespace embed EMBED_ABI_VISIBILITY(default)
 {
@@ -1046,20 +1055,6 @@ namespace detail {
 #define EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF(C, V, REF)\
     EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_IMPL(C, V, REF, )
 
-#define EMBED_FN_GENERATE_CODE_C_V_REF(F_)  \
-    F_(, , )                                \
-    F_(const, , )                           \
-    F_(, volatile, )                        \
-    F_(, , &)                               \
-    F_(const, volatile, )                   \
-    F_(const, , &)                          \
-    F_(, volatile, &)                       \
-    F_(const, volatile, &)                  \
-    F_(, , &&)                              \
-    F_(const, , &&)                         \
-    F_(, volatile, &&)                      \
-    F_(const, volatile, &&)
-
     // Overload the `get_unique_call_signature_impl` with different modifiers.
     // (const / volatile / {& | &&})
     EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF)
@@ -1083,7 +1078,6 @@ namespace detail {
 
 #endif
 
-#undef EMBED_FN_GENERATE_CODE_C_V_REF
 #undef EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_IMPL
 
 #if ( __cpp_explicit_this_parameter >= 202110L ) || ( EMBED_CXX_VERSION >= 202302L )
@@ -1134,20 +1128,6 @@ namespace detail {
         " And your signature format is incorrect.");
     };
 
-# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
-    F_(, , )                                \
-    F_(const, , )                           \
-    F_(, volatile, )                        \
-    F_(, , &)                               \
-    F_(const, volatile, )                   \
-    F_(const, , &)                          \
-    F_(, volatile, &)                       \
-    F_(const, volatile, &)                  \
-    F_(, , &&)                              \
-    F_(const, , &&)                         \
-    F_(, volatile, &&)                      \
-    F_(const, volatile, &&)
-
 #define EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE(C, V, REF)               \
     template <typename RetType, typename... ArgsType>               \
     struct unwrap_signature<RetType(ArgsType...) C V REF> {         \
@@ -1161,22 +1141,6 @@ namespace detail {
     EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE)
 
 #undef EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE
-
-#undef EMBED_FN_GENERATE_CODE_C_V_REF
-
-# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
-    F_(, , )                                \
-    F_(const, , )                           \
-    F_(, volatile, )                        \
-    F_(, , &)                               \
-    F_(const, volatile, )                   \
-    F_(const, , &)                          \
-    F_(, volatile, &)                       \
-    F_(const, volatile, &)                  \
-    F_(, , &&)                              \
-    F_(const, , &&)                         \
-    F_(, volatile, &&)                      \
-    F_(const, volatile, &&)
 
     // get_signature_qualifier
     template <typename Signature>
@@ -1196,7 +1160,6 @@ namespace detail {
     // (const / volatile / {& | &&})
     EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_GET_SIGNATURE_QUALIFIER)
 
-#undef EMBED_FN_GENERATE_CODE_C_V_REF
 #undef EMBED_FN_OVERLOAD_GET_SIGNATURE_QUALIFIER
 
     // qualifier_conv_safe
@@ -1336,20 +1299,6 @@ namespace detail {
       template <typename R, typename... As>
       struct check_is_class<R(*)(As...)> : public std::false_type {};
 
-# define EMBED_FN_GENERATE_CODE_C_V_REF(F_)   \
-      F_(, , )                                \
-      F_(const, , )                           \
-      F_(, volatile, )                        \
-      F_(, , &)                               \
-      F_(const, volatile, )                   \
-      F_(const, , &)                          \
-      F_(, volatile, &)                       \
-      F_(const, volatile, &)                  \
-      F_(, , &&)                              \
-      F_(const, , &&)                         \
-      F_(, volatile, &&)                      \
-      F_(const, volatile, &&)
-
 #define EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF)         \
       template <typename R, typename Cs, typename... As>  \
       struct check_is_class<R(Cs::*)(As...) C V REF> : public std::false_type {};
@@ -1358,7 +1307,6 @@ namespace detail {
       EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_IS_NOT_CLASS)
 
 #undef EMBED_FN_OVERLOAD_IS_NOT_CLASS
-#undef EMBED_FN_GENERATE_CODE_C_V_REF
 
       using Base = is_class_and_has_call_operator_helper<Functor, Args...>;
     public:
@@ -1773,20 +1721,6 @@ namespace detail {
     }                                                                     \
   };
 
-# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
-  F_(, , )                                  \
-  F_(const, , )                             \
-  F_(, volatile, )                          \
-  F_(, , &)                                 \
-  F_(const, volatile, )                     \
-  F_(const, , &)                            \
-  F_(, volatile, &)                         \
-  F_(const, volatile, &)                    \
-  F_(, , &&)                                \
-  F_(const, , &&)                           \
-  F_(, volatile, &&)                        \
-  F_(const, volatile, &&)
-
   // Use macro to generate code. (Overload for `FnQualifierHelper`)
   EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_QUALIFIER_HELPER_CODE)
 
@@ -1797,7 +1731,6 @@ namespace detail {
 # endif
 
 
-#undef EMBED_FN_GENERATE_CODE_C_V_REF
 #undef EMBED_FN_QUALIFIER_HELPER_CODE
 #undef EMBED_FN_MODIFIER_HELPER_MEMVARS
 #undef EMBED_FN_MODIFIER_HELPER_INVOKE_BODY
@@ -2460,21 +2393,6 @@ namespace detail {
     return function<Signature, BufSize>(fn);
   }
 
-  // Helper macro.
-# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
-  F_(, , )                                  \
-  F_(const, , )                             \
-  F_(, volatile, )                          \
-  F_(, , &)                                 \
-  F_(const, volatile, )                     \
-  F_(const, , &)                            \
-  F_(, volatile, &)                         \
-  F_(const, volatile, &)                    \
-  F_(, , &&)                                \
-  F_(const, , &&)                           \
-  F_(, volatile, &&)                        \
-  F_(const, volatile, &&)
-
   // Overload for member function.
 # define EMBED_FN_OVERLOAD_MEMBER_FUNCTION(CONST_, VOLATILE_, REF_)                           \
   template <typename Class, typename RetType, typename... ArgsType>                           \
@@ -2490,8 +2408,6 @@ namespace detail {
   EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_MEMBER_FUNCTION)
 
 # undef EMBED_FN_OVERLOAD_MEMBER_FUNCTION
-
-# undef EMBED_FN_GENERATE_CODE_C_V_REF
 
 
 #if ( __cpp_deduction_guides >= 201606 ) || ( EMBED_CXX_VERSION >= 201703L )
@@ -2549,6 +2465,7 @@ namespace std EMBED_ABI_VISIBILITY(default)
 #undef EMBED_FN_CASE_NOEXCEPT
 #undef EMBED_FN_ENSURE_NO_THROW
 #undef EMBED_FN_NO_WARING
+#undef EMBED_FN_GENERATE_CODE_C_V_REF
 
 #if defined(_MSC_VER)
 # pragma warning(pop)
