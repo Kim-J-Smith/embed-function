@@ -2486,6 +2486,7 @@ namespace std EMBED_ABI_VISIBILITY(default)
 #undef EMBED_FN_ENSURE_NO_THROW
 #undef EMBED_FN_NO_WARING
 #undef EMBED_FN_GENERATE_CODE_C_V_REF
+#undef EMBED_FN_SWITCH_EXPECT
 
 #if defined(_MSC_VER)
 # pragma warning(pop)
