@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.1.1
+ * @version     1.1.2
  * 
  * @date        2025-12-6
  * 
@@ -67,7 +67,7 @@ SOFTWARE.
  *  
  *  embed::function<Signature> fn = free_function;
  * 
- *  embed::function<void()> fn = []() { printf("hello\n"); };
+ *  embed::function<void() const> fn = []() { printf("hello\n"); };
  * 
  *  embed::function<Signature> fn = callable_class{};
  * 

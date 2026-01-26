@@ -1,6 +1,6 @@
 # embed-function
 
-![Version - 1.1.1](https://img.shields.io/badge/Version-1.1.1-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
+![Version - 1.1.2](https://img.shields.io/badge/Version-1.1.2-green?style=flat&logo=github) ![License - MIT](https://img.shields.io/badge/License-MIT-orange?style=flat) ![c++ - 11/14/17/20](https://img.shields.io/badge/C++-11/14/17/20-blue?style=flat)
 
 ![gcc-c++11/14/17/20/23 - passing](https://img.shields.io/badge/GCC_C++11/14/17/20/23-passing-brightgreen?style=flat) ![clang-c++11/14/17/20/23 - passing](https://img.shields.io/badge/Clang_C++11/14/17/20/23-passing-brightgreen?style=flat) ![msvc-c++14/17/20/23 - passing](https://img.shields.io/badge/MSVC_C++14/17/20/23-passing-brightgreen?style=flat)
 
@@ -43,14 +43,7 @@
 
   When a user attempts to perform a copy operation (copy constructor, copy assignment, etc) on an `embed::function` instance that is wrapped with an uncopyable type, the program will call the `bad_function_copy_handler` function (which defaults to terminating the program). The `bad_function_copy_handler` function is located at the beginning of embed_function.hpp and is customizable.
 
----
-
-## Quick start
-
-- Clone the repo.
-- Add include path <repo_root>/include
-- In program `#include "embed/embed_function.hpp"`
-- Use the `embed::function` template class.
+#### A function wrapper is declared as following:
 
 ```cpp
 embed::function<int(int, float, char) const, 3*sizeof(void*)>
@@ -59,6 +52,13 @@ embed::function<int(int, float, char) const, 3*sizeof(void*)>
 // Qualifier ~~~~~~~~~~~~~~~~~~~~~~~~~~~|       |
 // Buffer size ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|
 ```
+
+## Quick start
+
+- Clone the repo.
+- Add include path <repo_root>/include
+- In program `#include "embed/embed_function.hpp"`
+- Use the `embed::function` template class.
 
 ```cpp
 #include "embed/embed_function.hpp"
@@ -74,8 +74,8 @@ int main()
     Example e;
 
     // Here, the second template parameter can be omitted.
-    // Same as: embed::function<void(int)> fn;
-    embed::function<void(int), sizeof(void*)> fn;
+    // Same as: embed::function<void(int), sizeof(void*)> fn;
+    embed::function<void(int)> fn;
 
     fn = [&e](int p) { e.memberFkn(p); };
     fn(123);
