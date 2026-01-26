@@ -447,17 +447,31 @@ namespace detail {
   template <std::size_t BufSize>
   union EMBED_ALIAS FnFunctor
   {
+    // non-volatile
     EMBED_INLINE void* M_access() noexcept { return &M_pod_data[0]; }
-
     EMBED_INLINE const void* M_access() const noexcept { return &M_pod_data[0]; }
 
+    // volatile
+    EMBED_INLINE volatile void* M_access() volatile noexcept
+    { return &M_pod_data[0]; }
+    EMBED_INLINE const volatile void* M_access() volatile const noexcept
+    { return &M_pod_data[0]; }
+
+    // non-volatile
     template <typename T>
     EMBED_INLINE T& M_access() noexcept
     { return *EMBED_LAUNDER( static_cast<T*>(M_access()) ); }
-
     template <typename T>
     EMBED_INLINE const T& M_access() const noexcept
     { return *EMBED_LAUNDER( static_cast<const T*>(M_access()) ); }
+
+    // volatile
+    template <typename T>
+    EMBED_INLINE volatile T& M_access() volatile noexcept
+    { return *EMBED_LAUNDER( static_cast<volatile T*>(M_access()) ); }
+    template <typename T>
+    EMBED_INLINE const volatile T& M_access() volatile const noexcept
+    { return *EMBED_LAUNDER( static_cast<const volatile T*>(M_access()) ); }
 
     FnBufType<BufSize>    M_unused;
     char                  M_pod_data[sizeof(FnBufType<BufSize>)];
@@ -1266,20 +1280,46 @@ namespace detail {
   /**
    * @c FnToolBox::FnInvoker
    * @brief Invoke the functor for Fn.
+   * @note Is_volatile = false
    */
   template <typename RetType, typename Functor, std::size_t BufSize, 
-    bool Is_volatile, typename... ArgsType>
-  struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor, BufSize, Is_volatile>
+    typename... ArgsType>
+  struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor,
+    BufSize, /* Is_volatile = */ false>
   {
   private:
-    using FnFunctor_Qualifier = typename std::conditional<
-      Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
-    >::type;
+    using FnFunctor_Qualifier = FnFunctor<BufSize>;
 
     static EMBED_INLINE Functor*
     M_get_pointer(const FnFunctor_Qualifier& src) noexcept
     {
       const Functor& fn = src.template M_access<Functor>();
+      return const_cast<Functor*>(std::addressof(fn));
+    }
+  public:
+
+    static RetType M_invoke(const FnFunctor_Qualifier& functor, ArgsType&&... args)
+    EMBED_FN_CASE_NOEXCEPT
+    {
+      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
+        std::forward<ArgsType>(args)...);
+    }
+
+  };
+
+  /// @brief Overload @c FnToolBox::FnInvoker for Is_volatile = true
+  template <typename RetType, typename Functor, std::size_t BufSize, 
+    typename... ArgsType>
+  struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor,
+    BufSize, /* Is_volatile = */ true>
+  {
+  private:
+    using FnFunctor_Qualifier = volatile FnFunctor<BufSize>;
+
+    static EMBED_INLINE Functor*
+    M_get_pointer(const FnFunctor_Qualifier& src) noexcept
+    {
+      const volatile Functor& fn = src.template M_access<Functor>();
       return const_cast<Functor*>(std::addressof(fn));
     }
   public:
@@ -1397,7 +1437,7 @@ namespace detail {
     template <typename Func>
     static void M_create(volatile FnFunctor<BufSize>& dest, Func&& functor) noexcept
     {
-      ::new (dest.M_access()) Functor(std::forward<Func>(functor));
+      ::new (const_cast<void*>(dest.M_access())) Functor(std::forward<Func>(functor));
     }
 
     /// @e M_destroy
@@ -1410,7 +1450,7 @@ namespace detail {
     static Functor*
     M_get_pointer(const volatile FnFunctor<BufSize>& src) noexcept
     {
-      const Functor& fn = src.template M_access<Functor>();
+      const volatile Functor& fn = src.template M_access<Functor>();
       return const_cast<Functor*>(std::addressof(fn));
     }
 
@@ -1493,7 +1533,7 @@ namespace detail {
       "embed::Fn requires the functor to fit in `BufSize` and"
       " have valid alignment (adjust `BufSize` if needed)");
 
-    using Base = FnManagerHelper<RetType(ArgsType...), Functor, BufSize, false>;
+    using Base = FnManagerHelper<RetType(ArgsType...), Functor, BufSize, Is_volatile>;
     using FnFunctor_Qualifier = typename std::conditional<
       Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
     >::type;
@@ -1576,7 +1616,7 @@ namespace detail {
       "embed::Fn requires the functor to fit in `BufSize` and"
       " have valid alignment (adjust `BufSize` if needed)");
 
-    using Base = FnManagerHelper<RetType(ArgsType...), Functor, BufSize, false>;
+    using Base = FnManagerHelper<RetType(ArgsType...), Functor, BufSize, Is_volatile>;
     using FnFunctor_Qualifier = typename std::conditional<
       Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
     >::type;
