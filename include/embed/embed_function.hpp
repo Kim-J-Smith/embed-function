@@ -1468,7 +1468,7 @@ namespace detail {
 
     template <typename Signature, std::size_t Size>
     static bool M_not_empty_function(const volatile Fn<Signature, Size>& f) noexcept
-    { return static_cast<bool>(f); }
+    { return f.M_manager != nullptr; }
 
     template <typename T>
     static bool M_not_empty_function(T* fp) noexcept
