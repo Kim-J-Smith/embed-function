@@ -275,6 +275,17 @@ SOFTWARE.
 # endif
 #endif
 
+/// @c EMBED_SWITCH_EXPECT(condition,expect_val)
+#ifndef EMBED_SWITCH_EXPECT
+# if defined(__GNUC__) || defined(__clang__)
+#  define EMBED_SWITCH_EXPECT(condition,expect_val) __builtin_expect(condition,expect_val)
+# elif EMBED_HAS_BUILTIN(__builtin_expect)
+#  define EMBED_SWITCH_EXPECT(condition,expect_val) __builtin_expect(condition,expect_val)
+# else
+#  define EMBED_SWITCH_EXPECT(condition,expect_val) (condition)
+# endif
+#endif
+
 /// @c EMBED_UNREACHABLE()
 #ifndef EMBED_UNREACHABLE
 # if defined(_MSC_VER)
@@ -335,6 +346,7 @@ namespace embed { namespace detail {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
     /// @e `std::set_terminate` instead.
+    /// @example std::set_terminate(handle_reset);
 
     std::terminate(); // Terminate the program
   }
@@ -346,6 +358,7 @@ namespace embed { namespace detail {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
     /// @e `std::set_terminate` instead.
+    /// @example std::set_terminate(handle_reset);
 
     std::terminate(); // Terminate the program
   }
@@ -367,6 +380,14 @@ namespace embed { namespace detail {
   F_(const, , &&)                           \
   F_(, volatile, &&)                        \
   F_(const, volatile, &&)
+
+// Helper macro for switch-case
+# if ( EMBED_FN_NEED_FAST_CALL == false )
+#  define EMBED_FN_SWITCH_EXPECT(cond,val) \
+  EMBED_SWITCH_EXPECT(cond,val)
+# else
+#  define EMBED_FN_SWITCH_EXPECT(cond,val) (cond)
+# endif
 
 namespace embed EMBED_ABI_VISIBILITY(default)
 {
@@ -1528,7 +1549,7 @@ namespace detail {
     ) EMBED_CXX17_NOEXCEPT {
       typename Base::Invoker_Type invoker = nullptr;
 
-      switch (op)
+      switch (EMBED_FN_SWITCH_EXPECT(op, OP_get_invoker))
       {
       case OP_clone_functor:
         Base::M_init_functor(dest,
@@ -1613,7 +1634,7 @@ namespace detail {
     ) EMBED_CXX17_NOEXCEPT {
       typename Base::Invoker_Type invoker = nullptr;
 
-      switch (op)
+      switch (EMBED_FN_SWITCH_EXPECT(op, OP_get_invoker))
       {
       case OP_clone_functor:
         /// @attention non-copyable object CANNOT clone!
