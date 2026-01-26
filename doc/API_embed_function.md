@@ -19,8 +19,10 @@ The usage method of `embed::Fn` is very similar to that of `std::function`. The 
 namespace embed {
     template <typename Signature, std::size_t BufSize>
     class Fn; // undefined
+
+    // "[]" indicates optional. "|" indicates alternative.
     template <typename RetType, std::size_t BufSize, typename... ArgsType>
-    class Fn<RetType(ArgsType...), BufSize>;
+    class Fn<RetType(ArgsType...) [const | volatile | & | &&], BufSize>;
 
     template <typename Signature, std::size_t BufSize = detail::FnDefaultBufSize>
     using function = Fn<Signature, detail::FnToolBox::FnTraits::aligned_buf_size<BufSize>::value>;
