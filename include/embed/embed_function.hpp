@@ -1314,20 +1314,33 @@ namespace detail {
       typename std::decay<Functor>::type, Args...>
     {
     private:
+#if defined(EMBED_NO_STD_HEADER)
       template <typename Func>
       struct check_is_class : public std::true_type {};
       template <typename R, typename... As>
       struct check_is_class<R(*)(As...)> : public std::false_type {};
 
-#define EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF)         \
+# define EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF, NOEXC) \
       template <typename R, typename Cs, typename... As>  \
-      struct check_is_class<R(Cs::*)(As...) C V REF> : public std::false_type {};
+      struct check_is_class<R(Cs::*)(As...) C V REF NOEXC> : public std::false_type {};
+
+# if ( EMBED_CXX_VERSION >= 201703L )
+#  define EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER(C, V, REF)\
+      EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF, noexcept) \
+      EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF,)
+# else
+#  define EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER(C, V, REF)\
+      EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF,)
+# endif
 
       // Overload `is_class_and_has_call_operator::check_is_class`
-      EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_IS_NOT_CLASS)
+      EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER)
 
-#undef EMBED_FN_OVERLOAD_IS_NOT_CLASS
-
+# undef EMBED_FN_OVERLOAD_IS_NOT_CLASS
+# undef EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER
+#else
+      template <typename T> using check_is_class = std::is_class<T>;
+#endif // defined(EMBED_NO_STD_HEADER)
       using Base = is_class_and_has_call_operator_helper<Functor, Args...>;
     public:
       static constexpr bool is_class = 
