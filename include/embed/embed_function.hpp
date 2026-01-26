@@ -1274,6 +1274,99 @@ namespace detail {
         >::value && !std::is_reference<Functor>::value)
     >::type;
 
+    /// @e is_class_and_has_call_operator_helper
+    template <typename Functor, typename... Args>
+    struct is_class_and_has_call_operator_helper
+    {
+      template <typename>
+      static std::false_type S_test_const(...) { return {}; }
+      template <typename Func>
+      static typename std::enable_if<
+        std::is_void<void_t<
+          decltype(std::declval<Func const>()(std::declval<Args>()...))
+        >>::value, std::true_type
+      >::type S_test_const(int) { return {}; }
+
+      static constexpr bool is_const_callable = decltype(S_test_const<Functor>(0))::value;
+
+      template <typename>
+      static std::false_type S_test_rref(...) { return {}; }
+      template <typename Func>
+      static typename std::enable_if<
+        std::is_void<void_t<
+          decltype(std::declval<Func &&>()(std::declval<Args>()...))
+        >>::value, std::true_type
+      >::type S_test_rref(int) { return {}; }
+
+      static constexpr bool is_rref_callable = decltype(S_test_rref<Functor>(0))::value;
+
+      template <typename>
+      static std::false_type S_test_normal(...) { return {}; }
+      template <typename Func>
+      static typename std::enable_if<
+        std::is_void<void_t<
+          decltype(std::declval<Func &>()(std::declval<Args>()...))
+        >>::value, std::true_type
+      >::type S_test_normal(int) { return {}; }
+
+      static constexpr bool is_normal_callable = decltype(S_test_normal<Functor>(0))::value;
+    };
+
+    /// @e is_class_and_has_call_operator
+    template <typename PureSig, typename Functor>
+    struct is_class_and_has_call_operator;
+
+    template <typename Ret, typename Functor, typename... Args>
+    struct is_class_and_has_call_operator<Ret(Args...), Functor>
+    : private is_class_and_has_call_operator_helper<
+      typename std::decay<Functor>::type, Args...>
+    {
+    private:
+      template <typename Func>
+      struct check_is_class : public std::true_type {};
+      template <typename R, typename... As>
+      struct check_is_class<R(*)(As...)> : public std::false_type {};
+
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_)   \
+      F_(, , )                                \
+      F_(const, , )                           \
+      F_(, volatile, )                        \
+      F_(, , &)                               \
+      F_(const, volatile, )                   \
+      F_(const, , &)                          \
+      F_(, volatile, &)                       \
+      F_(const, volatile, &)                  \
+      F_(, , &&)                              \
+      F_(const, , &&)                         \
+      F_(, volatile, &&)                      \
+      F_(const, volatile, &&)
+
+#define EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF)         \
+      template <typename R, typename Cs, typename... As>  \
+      struct check_is_class<R(Cs::*)(As...) C V REF> : public std::false_type {};
+
+      // Overload `is_class_and_has_call_operator::check_is_class`
+      EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_IS_NOT_CLASS)
+
+#undef EMBED_FN_OVERLOAD_IS_NOT_CLASS
+#undef EMBED_FN_GENERATE_CODE_C_V_REF
+
+      using Base = is_class_and_has_call_operator_helper<Functor, Args...>;
+    public:
+      static constexpr bool is_class = 
+        check_is_class<typename std::decay<Functor>::type>::value;
+
+      static constexpr bool value = 
+        is_class && (
+          Base::is_const_callable || Base::is_rref_callable || Base::is_normal_callable
+        );
+
+      static constexpr bool is_const_q = is_class && Base::is_const_callable;
+      static constexpr bool is_rref_q = is_class && Base::is_rref_callable;
+      static constexpr bool not_const_q = is_class && (!Base::is_const_callable);
+      static constexpr bool not_rref_q = is_class && (!Base::is_rref_callable);
+    };
+
   }; // end FnTraits
 
 
@@ -1955,6 +2048,15 @@ namespace detail {
         "embed::Fn target must be NO-THROW constructible from the "
         "constructor argument");
 
+      static_assert(
+        !(FnTraits::get_signature_qualifier<Signature>::is_const 
+          && FnTraits::is_class_and_has_call_operator<
+            typename FnTraits::unwrap_signature<Signature>::pure_sig,
+            Functor>::not_const_q),
+        "embed::Fn requires the signature is non-const-qualified because the"
+        " Functor::operator() is not const-qualified"
+      );
+
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
@@ -1987,6 +2089,15 @@ namespace detail {
     {
       static_assert(Fn::Callable<Functor>::value,
         "embed::Fn requires the Functor is callable and the Signature match RetType");
+
+      static_assert(
+        !(FnTraits::get_signature_qualifier<Signature>::is_const 
+          && FnTraits::is_class_and_has_call_operator<
+            typename FnTraits::unwrap_signature<Signature>::pure_sig,
+            Functor>::not_const_q),
+        "embed::Fn requires the signature is non-const-qualified because the"
+        " Functor::operator() is not const-qualified"
+      );
 
       if (Fn::MyMoveOnly<DecayFunctor>::M_not_empty_function(func))
       {
@@ -2119,6 +2230,15 @@ namespace detail {
         "embed::Fn target must be NO-THROW constructible from the "
         "constructor argument");
 
+      static_assert(
+        !(FnTraits::get_signature_qualifier<Signature>::is_const 
+          && FnTraits::is_class_and_has_call_operator<
+            typename FnTraits::unwrap_signature<Signature>::pure_sig,
+            Functor>::not_const_q),
+        "embed::Fn requires the signature is non-const-qualified because the"
+        " Functor::operator() is not const-qualified"
+      );
+
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
         Fn::MyManager<DecayFunctor>::M_init_functor(M_functor, std::forward<Functor>(func));
@@ -2149,6 +2269,15 @@ namespace detail {
     {
       static_assert(Fn::Callable<Functor>::value,
         "embed::Fn requires the Functor is callable and the Signature match RetType");
+
+      static_assert(
+        !(FnTraits::get_signature_qualifier<Signature>::is_const 
+          && FnTraits::is_class_and_has_call_operator<
+            typename FnTraits::unwrap_signature<Signature>::pure_sig,
+            Functor>::not_const_q),
+        "embed::Fn requires the signature is non-const-qualified because the"
+        " Functor::operator() is not const-qualified"
+      );
 
       if (Fn::MyMoveOnly<DecayFunctor>::M_not_empty_function(func))
       {
