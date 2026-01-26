@@ -353,7 +353,7 @@ namespace embed { namespace detail {
 } } // end namespace embed::detail
 ////////////////////////////////////////////////////////////////
 
-// Helper macro to generate overlaod code.
+// Helper macro to generate overload code.
 # define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
   F_(, , )                                  \
   F_(const, , )                             \
@@ -400,7 +400,7 @@ namespace detail {
 
   /// @c throw_bad_function_call_or_abort
   // For private use only.
-  [[noreturn]] static inline void throw_bad_function_call_or_abort()
+  [[noreturn]] inline void throw_bad_function_call_or_abort()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true ) && (! EMBED_FN_ENSURE_NO_THROW)
     throw bad_function_call();
@@ -443,7 +443,7 @@ namespace detail {
    * @c FnFunctor
    * @note FnFunctor is trivial.
    * 
-   * The well defined operation of reusing its storage space is to use
+   * The well-defined operation of reusing its storage space is to use
    * placement new. After that, using M_access to obtain the address or reference
    * (rather than the content) is also in accordance with the C++ standard.
    * See https://eel.is/c++draft/basic.life#7
@@ -569,17 +569,17 @@ namespace detail {
 
     /// @brief The call tag. Used by `invoke_result` and `invoke_impl`.
     // free_func, static_memfunc, lambda, std::reference_wrapper<R Class::*>, ...
-    class invoke_tag__normal {};
+    class invoke_tag_normal {};
 
     // Class&, std::reference_wrapper<Class>, ...
-    class invoke_tag__memfn_ref_like {};
+    class invoke_tag_memfn_ref_like {};
     // Class*, std::unique_ptr<Class>, std::reference_wrapper<Class*>, ...
-    class invoke_tag__memfn_pointer_like {};
+    class invoke_tag_memfn_pointer_like {};
 
     // Class&, std::reference_wrapper<Class>, ...
-    class invoke_tag__memobj_ref_like {};
+    class invoke_tag_memobj_ref_like {};
     // Class*, std::unique_ptr<Class>, std::reference_wrapper<Class*>, ...
-    class invoke_tag__memobj_pointer_like {};
+    class invoke_tag_memobj_pointer_like {};
 
     /// @e inv_unwrap
     template <typename T, typename U = remove_cvref_t<T>>
@@ -611,7 +611,7 @@ namespace detail {
       template<typename> static failure_type S_test(...) { return {}; }
       template<typename T> static type_and_tag_wrapper<
         /* type = */ decltype(std::declval<T>().*std::declval<MemObj>()),
-        /* tag = */ invoke_tag__memobj_ref_like
+        /* tag = */ invoke_tag_memobj_ref_like
       > S_test(int) { return {}; }
 
       using type = decltype(S_test<Arg>(0));
@@ -623,7 +623,7 @@ namespace detail {
       template<typename> static failure_type S_test(...) { return {}; }
       template<typename T> static type_and_tag_wrapper<
         /* type = */ decltype((*std::declval<T>()).*std::declval<MemObj>()),
-        /* tag = */ invoke_tag__memobj_pointer_like
+        /* tag = */ invoke_tag_memobj_pointer_like
       > S_test(int) { return {}; }
 
       using type = decltype(S_test<Arg>(0));
@@ -654,7 +654,7 @@ namespace detail {
         /* type = */ decltype((std::declval<T>().*std::declval<MemFunc>())(
           std::declval<ArgsType>()...
         )),
-        /* tag = */ invoke_tag__memfn_ref_like
+        /* tag = */ invoke_tag_memfn_ref_like
       > S_test(int) { return {}; }
 
       using type = decltype(S_test<Arg>(0));
@@ -668,7 +668,7 @@ namespace detail {
         /* type = */ decltype(((*std::declval<T>()).*std::declval<MemFunc>())(
           std::declval<ArgsType>()...
         )),
-        /* tag = */ invoke_tag__memfn_pointer_like
+        /* tag = */ invoke_tag_memfn_pointer_like
       > S_test(int) { return {}; }
 
       using type = decltype(S_test<Arg>(0));
@@ -699,7 +699,7 @@ namespace detail {
       template<typename T> static type_and_tag_wrapper<
         /* type = */ decltype(std::declval<T>()(
           std::declval<ArgsType>()...)),
-        /* tag = */ invoke_tag__normal
+        /* tag = */ invoke_tag_normal
       > S_test(int) { return {}; }
 
       using type = decltype(S_test<Functor>(0));
@@ -833,8 +833,7 @@ namespace detail {
       }
 
       template <typename T, bool = false>
-      static std::false_type S_test(...) noexcept
-      { return std::false_type(); };
+      static std::false_type S_test(...) noexcept { return {}; };
 
       using type = decltype(S_test<RetT, true>(1));
       using noThrow = decltype(S_test<RetT>(1));
@@ -952,25 +951,25 @@ namespace detail {
      */
     template <typename RetT, typename Func, typename... Args>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
-    invoke_impl(invoke_tag__normal, Func&& fn, Args&&... args)
+    invoke_impl(invoke_tag_normal, Func&& fn, Args&&... args)
       noexcept(noexcept(std::forward<Func>(fn)(std::forward<Args>(args)...)))
     { return std::forward<Func>(fn)(std::forward<Args>(args)...); }
 
     template <typename RetT, typename MemObj, typename Arg>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
-    invoke_impl(invoke_tag__memobj_ref_like, MemObj&& obj, Arg&& arg)
+    invoke_impl(invoke_tag_memobj_ref_like, MemObj&& obj, Arg&& arg)
       noexcept(noexcept(static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemObj>(obj)))
     { return static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemObj>(obj); }
 
     template <typename RetT, typename MemObj, typename Arg>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
-    invoke_impl(invoke_tag__memobj_pointer_like, MemObj&& obj, Arg&& arg)
+    invoke_impl(invoke_tag_memobj_pointer_like, MemObj&& obj, Arg&& arg)
       noexcept(noexcept((*std::forward<Arg>(arg)).*std::forward<MemObj>(obj)))
     { return (*std::forward<Arg>(arg)).*std::forward<MemObj>(obj); }
 
     template <typename RetT, typename MemFunc, typename Arg, typename... ArgsType>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
-    invoke_impl(invoke_tag__memfn_ref_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
+    invoke_impl(invoke_tag_memfn_ref_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
       noexcept(noexcept(
         (static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemFunc>(memfn))(
           std::forward<ArgsType>(args)...)))
@@ -982,7 +981,7 @@ namespace detail {
 
     template <typename RetT, typename MemFunc, typename Arg, typename... ArgsType>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
-    invoke_impl(invoke_tag__memfn_pointer_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
+    invoke_impl(invoke_tag_memfn_pointer_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
       noexcept(noexcept(
         ((*std::forward<Arg>(arg)).*std::forward<MemFunc>(memfn))(
           std::forward<ArgsType>(args)...)))
