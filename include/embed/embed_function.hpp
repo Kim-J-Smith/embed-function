@@ -28,7 +28,7 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.1.0
+ * @version     1.1.1
  * 
  * @date        2025-12-6
  * 
@@ -97,12 +97,6 @@ SOFTWARE.
  * 
  *  embed::Fn fn = callable_class{...}; // require C++17 template deduce guide
  * 
- * TODO:
- * 
- *  1. Support the use of "const", "volatile", "&", "&&" etc. to modify the function signature.
- * 
- *  2. Support member functions that are "&&"-marked for packaging.
- * 
  */
 
 /// @c C++11 "embed_function.hpp"
@@ -133,6 +127,9 @@ SOFTWARE.
 // When an empty embed::Fn is called, the `bad_function_call_handler` function 
 // will be invoked for handling. This function can be customized by the user.
 #define EMBED_FN_ENSURE_NO_THROW    true
+
+// Disable the warnings of embed::Fn
+#define EMBED_FN_NO_WARING          false
 
 ////////////////////////////////////////////////////////////////
 
@@ -178,7 +175,7 @@ SOFTWARE.
 #endif
 
 /// @brief warning if exception is enabled.
-#if !EMBED_NO_WARNING
+#if ( !EMBED_NO_WARNING ) && ( !EMBED_FN_NO_WARING )
 # if ( EMBED_CXX_ENABLE_EXCEPTION != 0 )
 #  if defined(_MSC_VER)
 #   pragma message(__FILE__ " [WARNING]: You are using c++ exception, which may consume more ROM.\
@@ -278,6 +275,17 @@ SOFTWARE.
 # endif
 #endif
 
+/// @c EMBED_SWITCH_EXPECT(condition,expect_val)
+#ifndef EMBED_SWITCH_EXPECT
+# if defined(__GNUC__) || defined(__clang__)
+#  define EMBED_SWITCH_EXPECT(condition,expect_val) __builtin_expect(condition,expect_val)
+# elif EMBED_HAS_BUILTIN(__builtin_expect)
+#  define EMBED_SWITCH_EXPECT(condition,expect_val) __builtin_expect(condition,expect_val)
+# else
+#  define EMBED_SWITCH_EXPECT(condition,expect_val) (condition)
+# endif
+#endif
+
 /// @c EMBED_UNREACHABLE()
 #ifndef EMBED_UNREACHABLE
 # if defined(_MSC_VER)
@@ -338,6 +346,7 @@ namespace embed { namespace detail {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
     /// @e `std::set_terminate` instead.
+    /// @example std::set_terminate(handle_reset);
 
     std::terminate(); // Terminate the program
   }
@@ -349,12 +358,36 @@ namespace embed { namespace detail {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
     /// @e `std::set_terminate` instead.
+    /// @example std::set_terminate(handle_reset);
 
     std::terminate(); // Terminate the program
   }
 
 } } // end namespace embed::detail
 ////////////////////////////////////////////////////////////////
+
+// Helper macro to generate overload code.
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
+  F_(, , )                                  \
+  F_(const, , )                             \
+  F_(, volatile, )                          \
+  F_(, , &)                                 \
+  F_(const, volatile, )                     \
+  F_(const, , &)                            \
+  F_(, volatile, &)                         \
+  F_(const, volatile, &)                    \
+  F_(, , &&)                                \
+  F_(const, , &&)                           \
+  F_(, volatile, &&)                        \
+  F_(const, volatile, &&)
+
+// Helper macro for switch-case
+# if ( EMBED_FN_NEED_FAST_CALL == false )
+#  define EMBED_FN_SWITCH_EXPECT(cond,val) \
+  EMBED_SWITCH_EXPECT(cond,val)
+# else
+#  define EMBED_FN_SWITCH_EXPECT(cond,val) (cond)
+# endif
 
 namespace embed EMBED_ABI_VISIBILITY(default)
 {
@@ -388,7 +421,7 @@ namespace detail {
 
   /// @c throw_bad_function_call_or_abort
   // For private use only.
-  [[noreturn]] static inline void throw_bad_function_call_or_abort()
+  [[noreturn]] inline void throw_bad_function_call_or_abort()
   {
 #if ( EMBED_CXX_ENABLE_EXCEPTION == true ) && (! EMBED_FN_ENSURE_NO_THROW)
     throw bad_function_call();
@@ -431,7 +464,7 @@ namespace detail {
    * @c FnFunctor
    * @note FnFunctor is trivial.
    * 
-   * The well defined operation of reusing its storage space is to use
+   * The well-defined operation of reusing its storage space is to use
    * placement new. After that, using M_access to obtain the address or reference
    * (rather than the content) is also in accordance with the C++ standard.
    * See https://eel.is/c++draft/basic.life#7
@@ -444,17 +477,31 @@ namespace detail {
   template <std::size_t BufSize>
   union EMBED_ALIAS FnFunctor
   {
+    // non-volatile
     EMBED_INLINE void* M_access() noexcept { return &M_pod_data[0]; }
-
     EMBED_INLINE const void* M_access() const noexcept { return &M_pod_data[0]; }
 
+    // volatile
+    EMBED_INLINE volatile void* M_access() volatile noexcept
+    { return &M_pod_data[0]; }
+    EMBED_INLINE const volatile void* M_access() volatile const noexcept
+    { return &M_pod_data[0]; }
+
+    // non-volatile
     template <typename T>
     EMBED_INLINE T& M_access() noexcept
     { return *EMBED_LAUNDER( static_cast<T*>(M_access()) ); }
-
     template <typename T>
     EMBED_INLINE const T& M_access() const noexcept
     { return *EMBED_LAUNDER( static_cast<const T*>(M_access()) ); }
+
+    // volatile
+    template <typename T>
+    EMBED_INLINE volatile T& M_access() volatile noexcept
+    { return *EMBED_LAUNDER( static_cast<volatile T*>(M_access()) ); }
+    template <typename T>
+    EMBED_INLINE const volatile T& M_access() volatile const noexcept
+    { return *EMBED_LAUNDER( static_cast<const volatile T*>(M_access()) ); }
 
     FnBufType<BufSize>    M_unused;
     char                  M_pod_data[sizeof(FnBufType<BufSize>)];
@@ -483,28 +530,31 @@ namespace detail {
     /// @c FnTraits is aimed to provide these traits.
     struct FnTraits;
 
+    /// @c FnInvoker is aimed to help Fn call the functor.
+    /// When @b EMBED_FN_NEED_FAST_CALL is false, 
+    /// @c FnManagerCopyable, @c FnManagerMoveOnly
+    /// will help Fn call the functor instead of FnInvoker,
+    /// which will save the RAM, but is slower than FnInvoker.
+    template <typename Signature, typename Functor,
+      std::size_t BufSize, bool Is_volatile, bool Is_rref>
+    struct FnInvoker;
+
     // embed::Fn will forget the type of Functor
     /// @c FnManagerCopyable is aimed to remember the type, 
     /// help Fn manage copyable functor.
-    template <typename Signature, typename Functor, std::size_t BufSize>
+    template <typename Signature, typename Functor,
+      std::size_t BufSize, bool Is_volatile, bool Is_rref>
     struct FnManagerCopyable;
-
-#if (EMBED_FN_NEED_FAST_CALL == true)
-
-    /// @c FnInvoker is aimed to help Fn call the functor.
-    /// When @b EMBED_FN_NEED_FAST_CALL is false, FnManagerCopyable
-    /// will help Fn call the functor instead of FnInvoker,
-    /// which will save the RAM, but is slower than FnInvoker.
-    template <typename Signature, typename Functor, std::size_t BufSize>
-    struct FnInvoker;
-
-#endif
 
     // embed::Fn need to wrap non-copyable callable object.
     /// @c FnManagerMoveOnly is aimed to help Fn manage move-only functor.
-    template <typename Signature, typename Functor, std::size_t BufSize>
+    template <typename Signature, typename Functor,
+      std::size_t BufSize, bool Is_volatile, bool Is_rref>
     struct FnManagerMoveOnly;
 
+    template <typename Signature, typename Functor,
+      std::size_t BufSize, bool Is_volatile, bool Is_rref>
+    struct FnManagerHelper;
   };
 
 
@@ -540,17 +590,17 @@ namespace detail {
 
     /// @brief The call tag. Used by `invoke_result` and `invoke_impl`.
     // free_func, static_memfunc, lambda, std::reference_wrapper<R Class::*>, ...
-    class invoke_tag__normal {};
+    class invoke_tag_normal {};
 
     // Class&, std::reference_wrapper<Class>, ...
-    class invoke_tag__memfn_ref_like {};
+    class invoke_tag_memfn_ref_like {};
     // Class*, std::unique_ptr<Class>, std::reference_wrapper<Class*>, ...
-    class invoke_tag__memfn_pointer_like {};
+    class invoke_tag_memfn_pointer_like {};
 
     // Class&, std::reference_wrapper<Class>, ...
-    class invoke_tag__memobj_ref_like {};
+    class invoke_tag_memobj_ref_like {};
     // Class*, std::unique_ptr<Class>, std::reference_wrapper<Class*>, ...
-    class invoke_tag__memobj_pointer_like {};
+    class invoke_tag_memobj_pointer_like {};
 
     /// @e inv_unwrap
     template <typename T, typename U = remove_cvref_t<T>>
@@ -582,7 +632,7 @@ namespace detail {
       template<typename> static failure_type S_test(...) { return {}; }
       template<typename T> static type_and_tag_wrapper<
         /* type = */ decltype(std::declval<T>().*std::declval<MemObj>()),
-        /* tag = */ invoke_tag__memobj_ref_like
+        /* tag = */ invoke_tag_memobj_ref_like
       > S_test(int) { return {}; }
 
       using type = decltype(S_test<Arg>(0));
@@ -594,7 +644,7 @@ namespace detail {
       template<typename> static failure_type S_test(...) { return {}; }
       template<typename T> static type_and_tag_wrapper<
         /* type = */ decltype((*std::declval<T>()).*std::declval<MemObj>()),
-        /* tag = */ invoke_tag__memobj_pointer_like
+        /* tag = */ invoke_tag_memobj_pointer_like
       > S_test(int) { return {}; }
 
       using type = decltype(S_test<Arg>(0));
@@ -625,7 +675,7 @@ namespace detail {
         /* type = */ decltype((std::declval<T>().*std::declval<MemFunc>())(
           std::declval<ArgsType>()...
         )),
-        /* tag = */ invoke_tag__memfn_ref_like
+        /* tag = */ invoke_tag_memfn_ref_like
       > S_test(int) { return {}; }
 
       using type = decltype(S_test<Arg>(0));
@@ -639,7 +689,7 @@ namespace detail {
         /* type = */ decltype(((*std::declval<T>()).*std::declval<MemFunc>())(
           std::declval<ArgsType>()...
         )),
-        /* tag = */ invoke_tag__memfn_pointer_like
+        /* tag = */ invoke_tag_memfn_pointer_like
       > S_test(int) { return {}; }
 
       using type = decltype(S_test<Arg>(0));
@@ -670,7 +720,7 @@ namespace detail {
       template<typename T> static type_and_tag_wrapper<
         /* type = */ decltype(std::declval<T>()(
           std::declval<ArgsType>()...)),
-        /* tag = */ invoke_tag__normal
+        /* tag = */ invoke_tag_normal
       > S_test(int) { return {}; }
 
       using type = decltype(S_test<Functor>(0));
@@ -804,8 +854,7 @@ namespace detail {
       }
 
       template <typename T, bool = false>
-      static std::false_type S_test(...) noexcept
-      { return std::false_type(); };
+      static std::false_type S_test(...) noexcept { return {}; };
 
       using type = decltype(S_test<RetT, true>(1));
       using noThrow = decltype(S_test<RetT>(1));
@@ -817,10 +866,14 @@ namespace detail {
     /// @e Callable
     template <typename RetT, typename Functor, typename... ArgsT>
     struct Callable
-    : public is_invocable_impl<
-      invoke_result<typename std::decay<Functor>::type&, ArgsT...>, RetT
-    >::type
-    {
+    : public std::integral_constant<bool,
+      is_invocable_impl<
+        invoke_result<typename std::decay<Functor>::type&, ArgsT...>, RetT
+      >::type::value
+      || is_invocable_impl<
+        invoke_result<typename std::decay<Functor>::type&&, ArgsT...>, RetT
+      >::type::value
+    > {
       using Caller = typename std::decay<Functor>::type&;
       using Result = invoke_result<Caller, ArgsT...>;
 
@@ -919,25 +972,25 @@ namespace detail {
      */
     template <typename RetT, typename Func, typename... Args>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
-    invoke_impl(invoke_tag__normal, Func&& fn, Args&&... args)
+    invoke_impl(invoke_tag_normal, Func&& fn, Args&&... args)
       noexcept(noexcept(std::forward<Func>(fn)(std::forward<Args>(args)...)))
     { return std::forward<Func>(fn)(std::forward<Args>(args)...); }
 
     template <typename RetT, typename MemObj, typename Arg>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
-    invoke_impl(invoke_tag__memobj_ref_like, MemObj&& obj, Arg&& arg)
+    invoke_impl(invoke_tag_memobj_ref_like, MemObj&& obj, Arg&& arg)
       noexcept(noexcept(static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemObj>(obj)))
     { return static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemObj>(obj); }
 
     template <typename RetT, typename MemObj, typename Arg>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
-    invoke_impl(invoke_tag__memobj_pointer_like, MemObj&& obj, Arg&& arg)
+    invoke_impl(invoke_tag_memobj_pointer_like, MemObj&& obj, Arg&& arg)
       noexcept(noexcept((*std::forward<Arg>(arg)).*std::forward<MemObj>(obj)))
     { return (*std::forward<Arg>(arg)).*std::forward<MemObj>(obj); }
 
     template <typename RetT, typename MemFunc, typename Arg, typename... ArgsType>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
-    invoke_impl(invoke_tag__memfn_ref_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
+    invoke_impl(invoke_tag_memfn_ref_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
       noexcept(noexcept(
         (static_cast<inv_unwrap_t<Arg>&&>(arg).*std::forward<MemFunc>(memfn))(
           std::forward<ArgsType>(args)...)))
@@ -949,7 +1002,7 @@ namespace detail {
 
     template <typename RetT, typename MemFunc, typename Arg, typename... ArgsType>
     static EMBED_INLINE EMBED_CXX14_CONSTEXPR RetT
-    invoke_impl(invoke_tag__memfn_pointer_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
+    invoke_impl(invoke_tag_memfn_pointer_like, MemFunc&& memfn, Arg&& arg, ArgsType&&... args)
       noexcept(noexcept(
         ((*std::forward<Arg>(arg)).*std::forward<MemFunc>(memfn))(
           std::forward<ArgsType>(args)...)))
@@ -1004,7 +1057,7 @@ namespace detail {
     struct is_similar_Fn
     {
       static constexpr bool value = 
-        ( aligned_buf_size<SelfBuf>::value >= aligned_buf_size<OtherBuf>::value )
+        ( aligned_buf_size<SelfBuf>::value == aligned_buf_size<OtherBuf>::value )
         && results_are_same<OtherRet, SelfRet>::value
         && ( SelfArgNum == OtherArgNum )
         && arguments_are_same<SelfArgs_package, OtherArgs_package, SelfArgNum>::value;
@@ -1014,13 +1067,19 @@ namespace detail {
     template <typename Signature>
     struct get_unique_call_signature_impl;
 
-    template <typename Ret, typename Functor, typename... ArgsType>
-    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...)>
-    { using type = Ret(ArgsType...); };
+#define EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_IMPL(C, V, REF, NOEXC)\
+    template <typename Ret, typename Functor, typename... ArgsType>\
+    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) C V REF NOEXC>\
+    { using type = Ret(ArgsType...) C V REF; };
 
-    template <typename Ret, typename Functor, typename... ArgsType>
-    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const>
-    { using type = Ret(ArgsType...); };
+#define EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF(C, V, REF)\
+    EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_IMPL(C, V, REF, )
+
+    // Overload the `get_unique_call_signature_impl` with different modifiers.
+    // (const / volatile / {& | &&})
+    EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF)
+
+#undef EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF
 
 #if EMBED_CXX_VERSION >= 201703L
 
@@ -1028,15 +1087,18 @@ namespace detail {
     // The noexcept-specification is a part of the function type and 
     // may appear as part of any function declarator. (Since C++17)
 
-    template <typename Ret, typename Functor, typename... ArgsType>
-    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) noexcept>
-    { using type = Ret(ArgsType...); };
+# define EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF(C, V, REF)\
+    EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_IMPL(C, V, REF, noexcept)
 
-    template <typename Ret, typename Functor, typename... ArgsType>
-    struct get_unique_call_signature_impl<Ret (Functor::*) (ArgsType...) const noexcept>
-    { using type = Ret(ArgsType...); };
+    // Overload the `get_unique_call_signature_impl` with different modifiers.
+    // (const / volatile / {& | &&} + noexcept)
+    EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF)
+
+# undef EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_CVREF
 
 #endif
+
+#undef EMBED_FN_OVERLOAD_UNIQUE_CALL_SIGNATURE_IMPL
 
 #if ( __cpp_explicit_this_parameter >= 202110L ) || ( EMBED_CXX_VERSION >= 202302L )
 
@@ -1079,21 +1141,12 @@ namespace detail {
     };
 
     /// @e unwrap_signature
-    template <typename Signature> struct unwrap_signature;
-
-# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
-    F_(, , )                                \
-    F_(const, , )                           \
-    F_(, volatile, )                        \
-    F_(, , &)                               \
-    F_(const, volatile, )                   \
-    F_(const, , &)                          \
-    F_(, volatile, &)                       \
-    F_(const, volatile, &)                  \
-    F_(, , &&)                              \
-    F_(const, , &&)                         \
-    F_(, volatile, &&)                      \
-    F_(const, volatile, &&)
+    template <typename Signature> struct unwrap_signature
+    {
+      static_assert(std::is_void<void_t<Signature>>::value,
+        "The Signature must be like `Ret(Args...) [const | volatile | &]`."
+        " And your signature format is incorrect.");
+    };
 
 #define EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE(C, V, REF)               \
     template <typename RetType, typename... ArgsType>               \
@@ -1101,6 +1154,7 @@ namespace detail {
       using ret = RetType;                                          \
       using args = args_package<ArgsType...>;                       \
       static constexpr std::size_t arg_num = sizeof... (ArgsType);  \
+      using pure_sig = RetType(ArgsType...);                        \
     };
 
     // unwrap_signature for different kinds of signature.(const / volatile / {& | &&})
@@ -1108,7 +1162,72 @@ namespace detail {
 
 #undef EMBED_FN_OVERLOAD_UNWRAP_SIGNATURE
 
-#undef EMBED_FN_GENERATE_CODE_C_V_REF
+    // get_signature_qualifier
+    template <typename Signature>
+    struct get_signature_qualifier;
+
+#define EMBED_FN_OVERLOAD_GET_SIGNATURE_QUALIFIER(C, V, REF)                    \
+    template <typename Ret, typename... Args>                                   \
+    struct get_signature_qualifier<Ret(Args...) C V REF>                        \
+    {                                                                           \
+      static constexpr bool is_const = std::is_const<int C>::value;             \
+      static constexpr bool is_volatile = std::is_volatile<int V>::value;       \
+      static constexpr bool is_lref = std::is_lvalue_reference<int REF>::value; \
+      static constexpr bool is_rref = std::is_lvalue_reference<int REF>::value; \
+    };
+
+    // Use the macro to generate code for different kinds of signature.
+    // (const / volatile / {& | &&})
+    EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_GET_SIGNATURE_QUALIFIER)
+
+#undef EMBED_FN_OVERLOAD_GET_SIGNATURE_QUALIFIER
+
+    // qualifier_conv_safe
+    /**
+     * +------------------+------------------+--------+
+     * |       from       |        to        |  safe  |
+     * +------------------+------------------+--------+
+     * |    non-const     |       const      |   No   |
+     * |      const       |    non-const     |   Yes  |
+     * |   non-volatile   |      volatile    |   Yes  |
+     * |      volatile    |   non-volatile   |   No   |
+     * |       non-&      |          &       |   Yes  |
+     * |          &       |       non-&      |   No   |
+     * |      non-&&      |         &&       |   Yes  |
+     * |         &&       |       non-&&     |   No   |
+     * +------------------+------------------+--------+
+     */
+    template <typename SigFrom, typename SigTo>
+    struct qualifier_conv_safe
+    {
+      static constexpr bool value = 
+        !(
+      (!get_signature_qualifier<SigFrom>::is_const && get_signature_qualifier<SigTo>::is_const)
+    ||(get_signature_qualifier<SigFrom>::is_volatile && !get_signature_qualifier<SigTo>::is_volatile)
+    ||(get_signature_qualifier<SigFrom>::is_lref && !get_signature_qualifier<SigTo>::is_lref)
+    ||(get_signature_qualifier<SigFrom>::is_rref && !get_signature_qualifier<SigTo>::is_rref)
+        );
+    };
+
+
+    // is_similar_Fn_signature
+    template <typename SelfSig, typename OtherSig, std::size_t SelfSize, std::size_t OtherSize>
+    struct is_similar_Fn_signature
+    {
+      using SelfRet     = typename unwrap_signature<SelfSig>::ret;
+      using SelfArgs    = typename unwrap_signature<SelfSig>::args;
+      static constexpr std::size_t SelfArgNum = unwrap_signature<SelfSig>::arg_num;
+      using OtherRet     = typename unwrap_signature<OtherSig>::ret;
+      using OtherArgs    = typename unwrap_signature<OtherSig>::args;
+      static constexpr std::size_t OtherArgNum = unwrap_signature<OtherSig>::arg_num;
+
+      static constexpr bool value = 
+        is_similar_Fn<
+          SelfRet, SelfArgs, SelfArgNum, SelfSize,
+          OtherRet, OtherArgs, OtherArgNum, OtherSize
+        >::value 
+        && qualifier_conv_safe<OtherSig, SelfSig>::value;
+    };
 
     /// @e is_Fn_and_similar
     template <typename Signature, typename Functor>
@@ -1116,15 +1235,11 @@ namespace detail {
     : public std::false_type { };
 
     template <typename Signature,
-      typename OtherRet, std::size_t BufSize, typename... OtherArgs>
-    struct is_Fn_and_similar<Signature, Fn<OtherRet(OtherArgs...), BufSize>>
+      typename OtherSignature, std::size_t BufSize>
+    struct is_Fn_and_similar<Signature, Fn<OtherSignature, BufSize>>
     {
-      static constexpr bool value = is_similar_Fn<
-          typename unwrap_signature<Signature>::ret,
-          typename unwrap_signature<Signature>::args,
-          unwrap_signature<Signature>::arg_num,
-          BufSize, OtherRet, args_package<OtherArgs...>,
-          sizeof... (OtherArgs), BufSize
+      static constexpr bool value = is_similar_Fn_signature<
+          Signature, OtherSignature, BufSize, BufSize
         >::value;
     };
 
@@ -1151,22 +1266,261 @@ namespace detail {
         >::value && !std::is_reference<Functor>::value)
     >::type;
 
+    /// @e is_class_and_has_call_operator_helper
+    template <typename Functor, typename... Args>
+    struct is_class_and_has_call_operator_helper
+    {
+      template <typename>
+      static std::false_type S_test_const(...) { return {}; }
+      template <typename Func>
+      static typename std::enable_if<
+        std::is_void<void_t<
+          decltype(std::declval<Func const>()(std::declval<Args>()...))
+        >>::value, std::true_type
+      >::type S_test_const(int) { return {}; }
+
+      static constexpr bool is_const_callable = decltype(S_test_const<Functor>(0))::value;
+
+      template <typename>
+      static std::false_type S_test_rref(...) { return {}; }
+      template <typename Func>
+      static typename std::enable_if<
+        std::is_void<void_t<
+          decltype(std::declval<Func &&>()(std::declval<Args>()...))
+        >>::value, std::true_type
+      >::type S_test_rref(int) { return {}; }
+
+      static constexpr bool is_rref_callable = decltype(S_test_rref<Functor>(0))::value;
+
+      template <typename>
+      static std::false_type S_test_normal(...) { return {}; }
+      template <typename Func>
+      static typename std::enable_if<
+        std::is_void<void_t<
+          decltype(std::declval<Func &>()(std::declval<Args>()...))
+        >>::value, std::true_type
+      >::type S_test_normal(int) { return {}; }
+
+      static constexpr bool is_normal_callable = decltype(S_test_normal<Functor>(0))::value;
+    };
+
+    /// @e is_class_and_has_call_operator
+    template <typename PureSig, typename Functor>
+    struct is_class_and_has_call_operator;
+
+    template <typename Ret, typename Functor, typename... Args>
+    struct is_class_and_has_call_operator<Ret(Args...), Functor>
+    : private is_class_and_has_call_operator_helper<
+      typename std::decay<Functor>::type, Args...>
+    {
+    private:
+#if defined(EMBED_NO_STD_HEADER)
+      template <typename Func>
+      struct check_is_class : public std::true_type {};
+      template <typename R, typename... As>
+      struct check_is_class<R(*)(As...)> : public std::false_type {};
+
+# define EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF, NOEXC) \
+      template <typename R, typename Cs, typename... As>  \
+      struct check_is_class<R(Cs::*)(As...) C V REF NOEXC> : public std::false_type {};
+
+# if ( EMBED_CXX_VERSION >= 201703L )
+#  define EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER(C, V, REF)\
+      EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF, noexcept) \
+      EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF,)
+# else
+#  define EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER(C, V, REF)\
+      EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF,)
+# endif
+
+      // Overload `is_class_and_has_call_operator::check_is_class`
+      EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER)
+
+# undef EMBED_FN_OVERLOAD_IS_NOT_CLASS
+# undef EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER
+#else
+      template <typename T> using check_is_class = std::is_class<T>;
+#endif // defined(EMBED_NO_STD_HEADER)
+      using Base = is_class_and_has_call_operator_helper<Functor, Args...>;
+    public:
+      static constexpr bool is_class = 
+        check_is_class<typename std::decay<Functor>::type>::value;
+
+      static constexpr bool value = 
+        is_class && (
+          Base::is_const_callable || Base::is_rref_callable || Base::is_normal_callable
+        );
+
+      static constexpr bool is_const_q = is_class && Base::is_const_callable;
+      static constexpr bool is_rref_q = is_class && Base::is_rref_callable;
+      static constexpr bool not_const_q = is_class && (!Base::is_const_callable);
+      static constexpr bool not_rref_q = is_class && (!Base::is_rref_callable);
+    };
+
   }; // end FnTraits
+
+
+  /**
+   * @c FnToolBox::FnInvoker
+   * @brief Invoke the functor for Fn.
+   */
+  template <typename RetType, typename Functor, std::size_t BufSize, 
+    bool Is_volatile, bool Is_rref, typename... ArgsType>
+  struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor,
+    BufSize, Is_volatile, Is_rref>
+  {
+  private:
+    using FnFunctor_Qualifier = typename std::conditional<
+      Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
+    >::type;
+    using Func_Qualifier = typename std::conditional<
+      Is_volatile, volatile Functor, Functor
+    >::type;
+    using FnFunctor_Cast = typename std::conditional<
+      Is_rref, typename std::remove_reference<Functor>::type&&,
+      typename std::remove_reference<Functor>::type&
+    >::type;
+
+    static EMBED_INLINE Functor*
+    M_get_pointer(const FnFunctor_Qualifier& src) noexcept
+    {
+      const Func_Qualifier& fn = src.template M_access<Functor>();
+      return const_cast<Functor*>(std::addressof(fn));
+    }
+  public:
+
+    static RetType M_invoke(const FnFunctor_Qualifier& functor, ArgsType&&... args)
+    EMBED_FN_CASE_NOEXCEPT
+    {
+      return FnTraits::invoke_r<RetType>(
+        static_cast<FnFunctor_Cast>(*M_get_pointer(functor)),
+        std::forward<ArgsType>(args)...);
+    }
+
+  };
+
+
+  /**
+   * @brief The Base of @c FnToolBox::FnManagerCopyable
+   *                and @c FnToolBox::FnManagerMoveOnly
+   */
+  template <typename RetType, typename Functor, std::size_t BufSize,
+    bool Is_volatile, bool Is_rref, typename... ArgsType>
+  struct FnToolBox::FnManagerHelper<
+    RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>
+  {
+  private:
+    using FnFunctor_Qualifier = typename std::conditional<
+      Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
+    >::type;
+    using Func_Qualifier = typename std::conditional<
+      Is_volatile, volatile Functor, Functor
+    >::type;
+    using FnFunctor_Cast = typename std::conditional<
+      Is_rref, typename std::remove_reference<Functor>::type&&,
+      typename std::remove_reference<Functor>::type&
+    >::type;
+
+  public:
+    /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
+    using Invoker_Type = RetType (*) (const FnFunctor_Qualifier&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
+
+  protected:
+    /// @e M_create
+    /// Q: Why not use Functor, but use the `Func`?
+    /// A: Because this is Perfect Forwarding, so compiler need to
+    /// deduce the type of `Func`, rather than explicitly specifying it.
+    template <typename Func>
+    static void M_create(FnFunctor_Qualifier& dest, Func&& functor) noexcept
+    {
+      ::new (const_cast<void*>(dest.M_access()))
+        Functor(std::forward<Func>(functor));
+    }
+
+    /// @e M_destroy
+    static void M_destroy(FnFunctor_Qualifier& victim) noexcept
+    {
+      victim.template M_access<Functor>().~Functor();
+    }
+
+  public:
+    /**
+     * @e M_get_pointer
+     * @attention break the `const` promises.
+     * @note SAFE: Underneath the `src` variable is `M_functor`, which is non-const,
+     * and it's safe to use const_cast here. The non-const pointer obtained here
+     * is not used to explicitly modify the object, except for side effects and
+     * move operations when the callable object is invoked. The former provides
+     * the same safety as `std::function`, and the move operation strictly checks
+     * that the underlying object is non-const to ensure safety.
+     */
+    static Functor*
+    M_get_pointer(const FnFunctor_Qualifier& src) noexcept
+    {
+      const Func_Qualifier& fn = src.template M_access<Functor>();
+      return const_cast<Functor*>(std::addressof(fn));
+    }
+
+    /// @e M_not_empty_function
+    template <typename Signature, std::size_t Size>
+    static bool M_not_empty_function(const Fn<Signature, Size>& f) noexcept
+    { return static_cast<bool>(f); }
+
+    template <typename Signature, std::size_t Size>
+    static bool M_not_empty_function(const volatile Fn<Signature, Size>& f) noexcept
+    { return static_cast<bool>(f); }
+
+    template <typename T>
+    static bool M_not_empty_function(T* fp) noexcept
+    { return fp != nullptr; }
+
+    template <typename Class, typename T>
+    static bool M_not_empty_function(T Class::* mp) noexcept
+    { return mp != nullptr; }
+
+    template <typename T>
+    static bool M_not_empty_function(const T&) noexcept
+    { return true; }
+
+    /// @e M_init_functor
+    // init functor by using M_create (perfect forward)
+    template <typename Func>
+    static void M_init_functor(FnFunctor_Qualifier& dest, Func&& functor) noexcept
+    {
+      M_create(dest, std::forward<Func>(functor));
+    }
+
+#if ( EMBED_FN_NEED_FAST_CALL == false )
+
+    /// @e M_invoke
+    // This function only used when we expect FnManagerCopyable to help Fn
+    // call the functor instead of FnInvoker.
+    static RetType M_invoke(const FnFunctor_Qualifier& functor, ArgsType&&... args)
+    noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
+    {
+      return FnTraits::invoke_r<RetType>(
+        static_cast<FnFunctor_Cast>(*M_get_pointer(functor)),
+        std::forward<ArgsType>(args)...);
+    }
+
+#endif
+  };
 
 
   /**
    * @c FnToolBox::FnManagerCopyable
    * @brief Manage the functor for embed::Fn.
    */
-  template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct FnToolBox::FnManagerCopyable<RetType(ArgsType...), Functor, BufSize>
+  template <typename RetType, typename Functor, std::size_t BufSize,
+    bool Is_volatile, bool Is_rref, typename... ArgsType>
+  struct FnToolBox::FnManagerCopyable<
+    RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>
+  : public FnToolBox::FnManagerHelper<
+    RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>
   {
-  public:  
+  public:
     constexpr static std::size_t M_max_size = sizeof(FnBufType<BufSize>);
     constexpr static std::size_t M_max_align = alignof(FnBufType<BufSize>);
-
-    /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
 
     static constexpr bool noThrowExcept =
       std::is_nothrow_copy_constructible<Functor>::value
@@ -1192,105 +1546,40 @@ namespace detail {
       "embed::Fn requires the functor to fit in `BufSize` and"
       " have valid alignment (adjust `BufSize` if needed)");
 
-  private:
-    /// @e M_create
-    /// Q: Why not use Functor, but use the `Func`?
-    /// A: Because this is Perfect Forwarding, so compiler need to
-    /// deduce the type of `Func`, rather than explicitly specifying it.
-    template <typename Func>
-    static void M_create(FnFunctor<BufSize>& dest, Func&& functor) noexcept
-    {
-      ::new (dest.M_access()) Functor(std::forward<Func>(functor));
-    }
-
-    /// @e M_destroy
-    static void M_destroy(FnFunctor<BufSize>& victim) noexcept
-    {
-      victim.template M_access<Functor>().~Functor();
-    }
-
-  public:
-    /**
-     * @e M_get_pointer
-     * @attention break the `const` promises.
-     * @note SAFE: Underneath the `src` variable is `M_functor`, which is non-const,
-     * and it's safe to use const_cast here. The non-const pointer obtained here
-     * is not used to explicitly modify the object, except for side effects and
-     * move operations when the callable object is invoked. The former provides
-     * the same safety as `std::function`, and the move operation strictly checks
-     * that the underlying object is non-const to ensure safety.
-     */
-    static Functor*
-    M_get_pointer(const FnFunctor<BufSize>& src) noexcept
-    {
-      const Functor& fn = src.template M_access<Functor>();
-      return const_cast<Functor*>(std::addressof(fn));
-    }
-
-    /// @e M_not_empty_function
-    template <typename Signature, std::size_t Size>
-    static bool M_not_empty_function(const Fn<Signature, Size>& f) noexcept
-    { return static_cast<bool>(f); }
-
-    template <typename T>
-    static bool M_not_empty_function(T* fp) noexcept
-    { return fp != nullptr; }
-
-    template <typename Class, typename T>
-    static bool M_not_empty_function(T Class::* mp) noexcept
-    { return mp != nullptr; }
-
-    template <typename T>
-    static bool M_not_empty_function(const T&) noexcept
-    { return true; }
-
-    /// @e M_init_functor
-    // init functor by using M_create (perfect forward)
-    template <typename Func>
-    static void M_init_functor(FnFunctor<BufSize>& dest, Func&& functor) noexcept
-    {
-      M_create(dest, std::forward<Func>(functor));
-    }
-
-#if ( EMBED_FN_NEED_FAST_CALL == false )
-
-    /// @e M_invoke
-    // This function only used when we expect FnManagerCopyable to help Fn
-    // call the functor instead of FnInvoker.
-    static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
-    noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
-    {
-      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
-        std::forward<ArgsType>(args)...);
-    }
-
-#endif
+    using Base = FnManagerHelper<
+      RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>;
+    using FnFunctor_Qualifier = typename std::conditional<
+      Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
+    >::type;
 
     /// @e M_manager
     // Core func to manager functor.
-    static Invoker_Type
-    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, FunctorManagerOpCode op) EMBED_CXX17_NOEXCEPT
-    {
-      Invoker_Type invoker = nullptr;
+    static typename Base::Invoker_Type
+    M_manager(
+      FnFunctor_Qualifier& dest, 
+      const FnFunctor_Qualifier& src, 
+      FunctorManagerOpCode op
+    ) EMBED_CXX17_NOEXCEPT {
+      typename Base::Invoker_Type invoker = nullptr;
 
-      switch (op)
+      switch (EMBED_FN_SWITCH_EXPECT(op, OP_get_invoker))
       {
       case OP_clone_functor:
-        M_init_functor(dest,
-          *const_cast<const Functor*>(M_get_pointer(src)));
+        Base::M_init_functor(dest,
+          *const_cast<const Functor*>(Base::M_get_pointer(src)));
         break;
 
       case OP_move_functor:
-        M_init_functor(dest, std::move( *(M_get_pointer(src)) ));
+        Base::M_init_functor(dest, std::move( *(Base::M_get_pointer(src)) ));
         break;
 
       case OP_destroy_functor:
-        M_destroy(dest);
+        Base::M_destroy(dest);
         break;
 
 #if ( EMBED_FN_NEED_FAST_CALL == false )
       case OP_get_invoker:
-        invoker = &M_invoke;
+        invoker = &Base::M_invoke;
         break;
 #endif
 
@@ -1302,48 +1591,21 @@ namespace detail {
 
   };
 
-#if (EMBED_FN_NEED_FAST_CALL == true)
-
-  /**
-   * @c FnToolBox::FnInvoker
-   * @brief Invoke the functor for Fn.
-   */
-  template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct FnToolBox::FnInvoker<RetType(ArgsType...), Functor, BufSize>
-  {
-  private:
-    static EMBED_INLINE Functor*
-    M_get_pointer(const FnFunctor<BufSize>& src) noexcept
-    {
-      const Functor& fn = src.template M_access<Functor>();
-      return const_cast<Functor*>(std::addressof(fn));
-    }
-  public:
-
-    static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
-    EMBED_FN_CASE_NOEXCEPT
-    {
-      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
-        std::forward<ArgsType>(args)...);
-    }
-
-  };
-
-#endif
 
   /**
    * @c FnToolBox::FnManagerMoveOnly
    * @brief Manager non-copyable objects.
    */
-  template <typename RetType, typename Functor, std::size_t BufSize, typename... ArgsType>
-  struct FnToolBox::FnManagerMoveOnly<RetType(ArgsType...), Functor, BufSize>
+  template <typename RetType, typename Functor, std::size_t BufSize, 
+    bool Is_volatile, bool Is_rref, typename... ArgsType>
+  struct FnToolBox::FnManagerMoveOnly<
+    RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>
+  : public FnToolBox::FnManagerHelper<
+    RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>
   {
   public:
     constexpr static std::size_t M_max_size = sizeof(FnBufType<BufSize>);
     constexpr static std::size_t M_max_align = alignof(FnBufType<BufSize>);
-
-    /// @e Invoker_Type (same as `Invoker_Type` in embed::Fn)
-    using Invoker_Type = RetType (*) (const FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
 
     static constexpr bool noThrowExcept =
       std::is_nothrow_move_constructible<Functor>::value
@@ -1369,85 +1631,23 @@ namespace detail {
       "embed::Fn requires the functor to fit in `BufSize` and"
       " have valid alignment (adjust `BufSize` if needed)");
 
-  private:
-    /// @e M_create
-    template <typename Func>
-    static void M_create(FnFunctor<BufSize>& dest, Func&& functor) noexcept
-    {
-      ::new (dest.M_access()) Functor(std::move(functor));
-    }
-
-    /// @e M_destroy
-    static void M_destroy(FnFunctor<BufSize>& victim) noexcept
-    {
-      victim.template M_access<Functor>().~Functor();
-    }
-
-  public:
-    /**
-     * @e M_get_pointer
-     * @attention break the `const` promises.
-     * @note SAFE: Underneath the `src` variable is `M_functor`, which is non-const,
-     * and it's safe to use const_cast here. The non-const pointer obtained here
-     * is not used to explicitly modify the object, except for side effects and
-     * move operations when the callable object is invoked. The former provides
-     * the same safety as `std::function`, and the move operation strictly checks
-     * that the underlying object is non-const to ensure safety.
-     */
-    static Functor*
-    M_get_pointer(const FnFunctor<BufSize>& src) noexcept
-    {
-      const Functor& fn = src.template M_access<Functor>();
-      return const_cast<Functor*>(std::addressof(fn));
-    }
-
-    /// @e M_not_empty_function
-    template <typename Signature, std::size_t Size>
-    static bool M_not_empty_function(const Fn<Signature, Size>& f) noexcept
-    { return static_cast<bool>(f); }
-
-    template <typename T>
-    static bool M_not_empty_function(T* fp) noexcept
-    { return fp != nullptr; }
-
-    template <typename Class, typename T>
-    static bool M_not_empty_function(T Class::* mp) noexcept
-    { return mp != nullptr; }
-
-    template <typename T>
-    static bool M_not_empty_function(const T&) noexcept
-    { return true; }
-
-    /// @e M_init_functor
-    // init functor by using M_create (perfect forward)
-    template <typename Func>
-    static void M_init_functor(FnFunctor<BufSize>& dest, Func&& functor) noexcept
-    {
-      M_create(dest, std::move(functor));
-    }
-
-#if ( EMBED_FN_NEED_FAST_CALL == false )
-
-    /// @e M_invoke
-    // This function only used when we expect FnManagerMoveOnly to help Fn
-    // call the functor instead of FnInvoker.
-    static RetType M_invoke(const FnFunctor<BufSize>& functor, ArgsType&&... args)
-    noexcept(FnTraits::Callable<RetType, Functor, ArgsType...>::NoThrow_v)
-    {
-      return FnTraits::invoke_r<RetType>(*M_get_pointer(functor),
-        std::forward<ArgsType>(args)...);
-    }
-
-#endif
+    using Base = FnManagerHelper<
+      RetType(ArgsType...), Functor, BufSize, Is_volatile, Is_rref>;
+    using FnFunctor_Qualifier = typename std::conditional<
+      Is_volatile, volatile FnFunctor<BufSize>, FnFunctor<BufSize>
+    >::type;
 
     /// @e M_manager
     // Core func to manager functor.
-    static Invoker_Type
-    M_manager(FnFunctor<BufSize>& dest, const FnFunctor<BufSize>& src, FunctorManagerOpCode op) EMBED_CXX17_NOEXCEPT
-    {
-      Invoker_Type invoker = nullptr;
+    static typename Base::Invoker_Type
+    M_manager(
+      FnFunctor_Qualifier& dest, 
+      const FnFunctor_Qualifier& src, 
+      FunctorManagerOpCode op
+    ) EMBED_CXX17_NOEXCEPT {
+      typename Base::Invoker_Type invoker = nullptr;
 
-      switch (op)
+      switch (EMBED_FN_SWITCH_EXPECT(op, OP_get_invoker))
       {
       case OP_clone_functor:
         /// @attention non-copyable object CANNOT clone!
@@ -1456,16 +1656,16 @@ namespace detail {
         break;
 
       case OP_move_functor:
-        M_init_functor(dest, std::move( *(M_get_pointer(src)) ));
+        Base::M_init_functor(dest, std::move( *(Base::M_get_pointer(src)) ));
         break;
 
       case OP_destroy_functor:
-        M_destroy(dest);
+        Base::M_destroy(dest);
         break;
 
 #if ( EMBED_FN_NEED_FAST_CALL == false )
       case OP_get_invoker:
-        invoker = &M_invoke;
+        invoker = &Base::M_invoke;
         break;
 #endif
 
@@ -1476,16 +1676,114 @@ namespace detail {
     }
   };
 
+#define EMBED_FN_MODIFIER_HELPER_MAIN_BODY(C, V, REF)                                     \
+  template <typename Functor>                                                             \
+  using Copyable = FnToolBox::FnManagerCopyable<RetType(ArgsType...),                     \
+    Functor, BufSize, std::is_volatile<V int>::value,                                     \
+    std::is_rvalue_reference<int REF>::value>;                                            \
+  template <typename Functor>                                                             \
+  using MoveOnly = FnToolBox::FnManagerMoveOnly<RetType(ArgsType...),                     \
+    Functor, BufSize, std::is_volatile<V int>::value,                                     \
+    std::is_rvalue_reference<int REF>::value>;                                            \
+  template <typename Functor>                                                             \
+  using Invoker = FnToolBox::FnInvoker<RetType(ArgsType...),                              \
+    Functor, BufSize, std::is_volatile<V int>::value,                                     \
+    std::is_rvalue_reference<int REF>::value>;                                            \
+  template <typename Functor>                                                             \
+  using Callable = FnToolBox::FnTraits::Callable<RetType, Functor, ArgsType...>;          \
+  using Invoker_Type = RetType (*)                                                        \
+    (const V FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;                  \
+  using Manager_Type = Invoker_Type (*) (V FnFunctor<BufSize>&,                           \
+    const V FnFunctor<BufSize>&, FnToolBox::FunctorManagerOpCode) EMBED_CXX17_NOEXCEPT;
+
+# if defined(__clang__)
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wuninitialized"
+# elif defined(__GNUC__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+# endif
+
+#if ( EMBED_FN_NEED_FAST_CALL == true )
+# define EMBED_FN_MODIFIER_HELPER_MEMVARS \
+  FnFunctor<BufSize>  M_functor{};        \
+  Manager_Type        M_manager{};        \
+  Invoker_Type        M_invoker{};
+# define EMBED_FN_MODIFIER_HELPER_INVOKE_BODY                     \
+  if EMBED_LIKELY(M_invoker)                                      \
+    return M_invoker(M_functor, std::forward<ArgsType>(args)...); \
+  else                                                            \
+    detail::throw_bad_function_call_or_abort(); /* may not throw exception */
+#else
+# define EMBED_FN_MODIFIER_HELPER_MEMVARS \
+  FnFunctor<BufSize>  M_functor{};        \
+  Manager_Type        M_manager{};
+# define EMBED_FN_MODIFIER_HELPER_INVOKE_BODY                               \
+  if EMBED_LIKELY(M_manager) {                                              \
+    detail::FnFunctor<BufSize> nil;                                         \
+    Invoker_Type invoker = M_manager(nil, nil, FnToolBox::OP_get_invoker);  \
+    return invoker(M_functor, std::forward<ArgsType>(args)...);             \
+  }                                                                         \
+  else                                                                      \
+    detail::throw_bad_function_call_or_abort(); /* may not throw exception */
+#endif
+
+  /**
+   * @brief Help "embed::Fn" handle various different modifiers.
+   */
+  template <typename Signature, std::size_t>
+  struct FnQualifierHelper
+  {
+    static_assert(
+      std::is_void<FnToolBox::FnTraits::void_t<Signature>>::value /* always false */,
+      "The Signature must be like `Ret(Args...) [const | volatile | &]`."
+      " And your signature format is incorrect.");
+  };
+
+#define EMBED_FN_QUALIFIER_HELPER_CODE(C, V, REF)                         \
+  template <typename RetType, std::size_t BufSize, typename... ArgsType>  \
+  struct FnQualifierHelper<RetType(ArgsType...) C V REF, BufSize>         \
+  {                                                                       \
+    protected:                                                            \
+    EMBED_FN_MODIFIER_HELPER_MAIN_BODY(C, V, REF)                         \
+    EMBED_FN_MODIFIER_HELPER_MEMVARS                                      \
+    public:                                                               \
+    EMBED_INLINE RetType operator() (ArgsType... args) C V REF            \
+    EMBED_FN_CASE_NOEXCEPT {                                              \
+      EMBED_FN_MODIFIER_HELPER_INVOKE_BODY                                \
+    }                                                                     \
+  };
+
+  // Use macro to generate code. (Overload for `FnQualifierHelper`)
+  EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_QUALIFIER_HELPER_CODE)
+
+# if defined(__clang__)
+#  pragma clang diagnostic pop
+# elif defined(__GNUC__)
+#  pragma GCC diagnostic pop
+# endif
+
+
+#undef EMBED_FN_QUALIFIER_HELPER_CODE
+#undef EMBED_FN_MODIFIER_HELPER_MEMVARS
+#undef EMBED_FN_MODIFIER_HELPER_INVOKE_BODY
+#undef EMBED_FN_MODIFIER_HELPER_MAIN_BODY
+
 } // end namespace embed::detail
 
   /**
    * @brief   A light polymorphic wrapper for callable object.
    * @note    Only use stack memory. NO HEAP MEMORY!
    */
-  template <typename RetType, std::size_t BufSize, typename... ArgsType>
-  class Fn<RetType(ArgsType...), BufSize> : private detail::FnToolBox
+  // template <typename RetType, std::size_t BufSize, typename... ArgsType>
+  template <typename Signature, std::size_t BufSize>
+  class Fn
+  : private detail::FnToolBox
+  , public detail::FnQualifierHelper<Signature, BufSize>
   {
   private:
+    using MyQualifierHelper = detail::FnQualifierHelper<Signature, BufSize>;
+
     template <typename Functor>
     using DecayFunc_t = typename std::enable_if<
       !std::is_same<Fn, FnTraits::remove_cvref_t<Functor> >::value,
@@ -1493,44 +1791,44 @@ namespace detail {
     >::type;
 
     template <typename Functor>
-    using MyManager = FnManagerCopyable<RetType(ArgsType...), Functor, BufSize>;
+    using MyManager = typename MyQualifierHelper::template Copyable<Functor>;
+
+    template <typename Functor>
+    using MyMoveOnly = typename MyQualifierHelper::template MoveOnly<Functor>;
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
     template <typename Functor>
-    using MyInvoker = FnInvoker<RetType(ArgsType...), Functor, BufSize>;
+    using MyInvoker = typename MyQualifierHelper::template Invoker<Functor>;
 #endif
 
-    template <typename Functor>
-    using MyMoveOnly = FnManagerMoveOnly<RetType(ArgsType...), Functor, BufSize>;
+    using Invoker_Type = typename MyQualifierHelper::Invoker_Type;
+
+    using Manager_Type = typename MyQualifierHelper::Manager_Type;
 
     template <typename Functor>
-    using Callable = FnTraits::Callable<RetType, Functor, ArgsType...>;
-
-    using Invoker_Type = RetType (*) (const detail::FnFunctor<BufSize>&, ArgsType&&...) EMBED_FN_CASE_NOEXCEPT;
-
-    using Manager_Type = 
-      Invoker_Type (*) (detail::FnFunctor<BufSize>&, const detail::FnFunctor<BufSize>&, FunctorManagerOpCode) EMBED_CXX17_NOEXCEPT;
-
-  private:
+    using Callable = typename MyQualifierHelper::template Callable<Functor>;
 
     // The `M_functor` store the callable object.
-    detail::FnFunctor<BufSize>    M_functor{};
+    using MyQualifierHelper::M_functor;
 
     // The `M_manager` describes how to move / copy / destroy the `M_functor`,
     // and even describes how to invoke `M_functor` when not using `M_invoker`.
-    Manager_Type                  M_manager{};
+    using MyQualifierHelper::M_manager;
 
 #if ( EMBED_FN_NEED_FAST_CALL == true )
-
     // invoker for the functor (func pointer)
-    /// IF @b EMBED_FN_NEED_FAST_CALL is not true, `M_manager` 
+    /// If @b EMBED_FN_NEED_FAST_CALL is not true, `M_manager` 
     /// will help Fn invoke functor instead of `M_invoker`.
-    Invoker_Type                  M_invoker{};
-
+    using MyQualifierHelper::M_invoker;
 #endif
 
+    // ArgsPackage, RetType, and ArgsNum
+    using ArgsPackage   = typename          FnTraits::unwrap_signature<Signature>::args;
+    using RetType       = typename          FnTraits::unwrap_signature<Signature>::ret;
+    static constexpr std::size_t ArgsNum =  FnTraits::unwrap_signature<Signature>::arg_num;
+
     // Regard all Fn<Signature, BufSize> as friend class.
-    template <typename Signature, std::size_t BSize>
+    template <typename Sig, std::size_t BSize>
     friend class Fn;
 
   public:
@@ -1613,16 +1911,12 @@ namespace detail {
     // Construct Fn<Sig_A> with Fn<Sig_B>
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
     // `Sig_A.args` are same with `Sig_B.args`.
-    template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
+    template <typename OtherSignature, std::size_t OtherSize>
     Fn(
-      const Fn<OtherRet(OtherArgs...), OtherSize>& fn,
-      typename std::enable_if<
-        FnTraits::is_similar_Fn<
-          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
-          OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
-        >::value,
-        bool
-      >::type = true
+      const Fn<OtherSignature, OtherSize>& fn,
+      typename std::enable_if<FnTraits::is_Fn_and_similar<
+        Signature, Fn<OtherSignature, OtherSize>
+      >::value, bool>::type = true
     ) noexcept {
       if (static_cast<bool>(fn))
       {
@@ -1649,6 +1943,9 @@ namespace detail {
      */
     template <typename Functor,
       typename DecayFunctor = Fn::DecayFunc_t<Functor>,
+      typename = typename std::enable_if<!FnTraits::is_Fn_and_similar<
+        Signature, FnTraits::remove_cvref_t<Functor>
+      >::value>::type,
       typename = FnTraits::disableIf_movable_and_non_copyable_and_nref_t<Functor> >
     Fn(Functor&& func) noexcept
     {
@@ -1661,6 +1958,15 @@ namespace detail {
       static_assert(std::is_nothrow_constructible<DecayFunctor, Functor>::value,
         "embed::Fn target must be NO-THROW constructible from the "
         "constructor argument");
+
+      static_assert(
+        !(FnTraits::get_signature_qualifier<Signature>::is_const 
+          && FnTraits::is_class_and_has_call_operator<
+            typename FnTraits::unwrap_signature<Signature>::pure_sig,
+            Functor>::not_const_q),
+        "embed::Fn requires the signature is non-const-qualified because the"
+        " Functor::operator() is not const-qualified"
+      );
 
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
@@ -1686,11 +1992,23 @@ namespace detail {
     template <typename Functor,
       typename DecayFunctor = Fn::DecayFunc_t<Functor>,
       typename = FnTraits::enableIf_movable_and_non_copyable_t<DecayFunctor>,
+      typename = typename std::enable_if<!FnTraits::is_Fn_and_similar<
+        Signature, FnTraits::remove_cvref_t<Functor>
+      >::value>::type,
       typename = typename std::enable_if<!std::is_reference<Functor>::value>::type >
     Fn(Functor&& func)
     {
       static_assert(Fn::Callable<Functor>::value,
         "embed::Fn requires the Functor is callable and the Signature match RetType");
+
+      static_assert(
+        !(FnTraits::get_signature_qualifier<Signature>::is_const 
+          && FnTraits::is_class_and_has_call_operator<
+            typename FnTraits::unwrap_signature<Signature>::pure_sig,
+            Functor>::not_const_q),
+        "embed::Fn requires the signature is non-const-qualified because the"
+        " Functor::operator() is not const-qualified"
+      );
 
       if (Fn::MyMoveOnly<DecayFunctor>::M_not_empty_function(func))
       {
@@ -1730,17 +2048,6 @@ namespace detail {
       }
       std::swap(M_manager, fn.M_manager);
       std::swap(M_invoker, fn.M_invoker);
-    }
-
-    /// @brief Call the functor with type `ArgsType...` arguments.
-    /// @attention This contravenes [res.on.data.races]/p3. (same as `std::function`)
-    EMBED_INLINE RetType operator() (ArgsType... args) const
-    EMBED_FN_CASE_NOEXCEPT
-    {
-      if EMBED_LIKELY(M_invoker)
-        return M_invoker(M_functor, std::forward<ArgsType>(args)...);
-      else
-        detail::throw_bad_function_call_or_abort(); /* may not throw exception */
     }
 
     /// @brief Overload the function specifically for the case where nullptr is
@@ -1787,16 +2094,12 @@ namespace detail {
     // Construct Fn<Sig_A> with Fn<Sig_B>
     // restrictions: `Sig_B.ret` can convert to `Sig_A.ret`
     // `Sig_A.args` are same with `Sig_B.args`.
-    template <typename OtherRet, std::size_t OtherSize, typename... OtherArgs>
+    template <typename OtherSignature, std::size_t OtherSize>
     Fn(
-      const Fn<OtherRet(OtherArgs...), OtherSize>& fn,
-      typename std::enable_if<
-        FnTraits::is_similar_Fn<
-          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
-          OtherRet, FnTraits::args_package<OtherArgs...>, sizeof...(OtherArgs), OtherSize
-        >::value,
-        bool
-      >::type = true
+      const Fn<OtherSignature, OtherSize>& fn,
+      typename std::enable_if<FnTraits::is_Fn_and_similar<
+        Signature, Fn<OtherSignature, OtherSize>
+      >::value, bool>::type = true
     ) noexcept {
       if (static_cast<bool>(fn))
       {
@@ -1822,6 +2125,9 @@ namespace detail {
      */
     template <typename Functor,
       typename DecayFunctor = Fn::DecayFunc_t<Functor>,
+      typename = typename std::enable_if<!FnTraits::is_Fn_and_similar<
+        Signature, FnTraits::remove_cvref_t<Functor>
+      >::value>::type,
       typename = FnTraits::disableIf_movable_and_non_copyable_and_nref_t<Functor> >
     Fn(Functor&& func) noexcept
     {
@@ -1834,6 +2140,15 @@ namespace detail {
       static_assert(std::is_nothrow_constructible<DecayFunctor, Functor>::value,
         "embed::Fn target must be NO-THROW constructible from the "
         "constructor argument");
+
+      static_assert(
+        !(FnTraits::get_signature_qualifier<Signature>::is_const 
+          && FnTraits::is_class_and_has_call_operator<
+            typename FnTraits::unwrap_signature<Signature>::pure_sig,
+            Functor>::not_const_q),
+        "embed::Fn requires the signature is non-const-qualified because the"
+        " Functor::operator() is not const-qualified"
+      );
 
       if (Fn::MyManager<DecayFunctor>::M_not_empty_function(func))
       {
@@ -1857,11 +2172,23 @@ namespace detail {
     template <typename Functor,
       typename DecayFunctor = Fn::DecayFunc_t<Functor>,
       typename = FnTraits::enableIf_movable_and_non_copyable_t<DecayFunctor>,
+      typename = typename std::enable_if<!FnTraits::is_Fn_and_similar<
+        Signature, FnTraits::remove_cvref_t<Functor>
+      >::value>::type,
       typename = typename std::enable_if<!std::is_reference<Functor>::value>::type >
     Fn(Functor&& func)
     {
       static_assert(Fn::Callable<Functor>::value,
         "embed::Fn requires the Functor is callable and the Signature match RetType");
+
+      static_assert(
+        !(FnTraits::get_signature_qualifier<Signature>::is_const 
+          && FnTraits::is_class_and_has_call_operator<
+            typename FnTraits::unwrap_signature<Signature>::pure_sig,
+            Functor>::not_const_q),
+        "embed::Fn requires the signature is non-const-qualified because the"
+        " Functor::operator() is not const-qualified"
+      );
 
       if (Fn::MyMoveOnly<DecayFunctor>::M_not_empty_function(func))
       {
@@ -1900,34 +2227,6 @@ namespace detail {
       std::swap(M_manager, fn.M_manager);
     }
 
-# if defined(__clang__)
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Wuninitialized"
-# elif defined(__GNUC__)
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-# endif
-
-    /// @brief Call the functor with type `ArgsType...` arguments.
-    /// @attention This contravenes [res.on.data.races]/p3. (same as `std::function`)
-    EMBED_INLINE RetType operator() (ArgsType... args) const
-    EMBED_FN_CASE_NOEXCEPT
-    {
-      if EMBED_LIKELY(M_manager) {
-        detail::FnFunctor<BufSize> nil;
-        Invoker_Type invoker = M_manager(nil, nil, OP_get_invoker);
-        return invoker(M_functor, std::forward<ArgsType>(args)...);
-      }
-      else
-        detail::throw_bad_function_call_or_abort(); /* may not throw exception */
-    }
-
-# if defined(__clang__)
-#  pragma clang diagnostic pop
-# elif defined(__GNUC__)
-#  pragma GCC diagnostic pop
-# endif
-
     /// @brief Overload the function specifically for the case where nullptr is
     /// passed as a parameter, in order to improve the program's running efficiency. 
     /// (Using the `swap` method would be much slower.)
@@ -1962,17 +2261,12 @@ namespace detail {
 
     /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
-    template <typename RetT, std::size_t OtherBufSize, typename... ArgsT>
-    EMBED_INLINE Fn& operator=(const Fn<RetT(ArgsT...), OtherBufSize>& fn)
-    noexcept(
-      std::enable_if<
-        FnTraits::is_similar_Fn<
-          RetType, FnTraits::args_package<ArgsType...>, sizeof...(ArgsType), BufSize,
-          RetT, FnTraits::args_package<ArgsT...>, sizeof...(ArgsT), OtherBufSize
-        >::value,
-        std::true_type
-      >::type::value
-    ) {
+    template <typename OtherSignature, std::size_t OtherSize,
+      typename = typename std::enable_if<FnTraits::is_Fn_and_similar<
+        Signature, Fn<OtherSignature, OtherSize>
+      >::value>::type>
+    EMBED_INLINE Fn& operator=(const Fn<OtherSignature, OtherSize>& fn) noexcept 
+    {
       Fn(fn).swap(*this);
       return *this;
     }
@@ -1980,7 +2274,10 @@ namespace detail {
     /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     template <typename Functor,
-      typename DecayFunc = Fn::DecayFunc_t<Functor> >
+      typename DecayFunc = Fn::DecayFunc_t<Functor>,
+      typename = typename std::enable_if<!FnTraits::is_Fn_and_similar<
+        Signature, FnTraits::remove_cvref_t<Functor>
+      >::value>::type>
     EMBED_INLINE Fn& operator=(Functor&& func) noexcept
     {
       Fn(std::forward<Functor>(func)).swap(*this);
@@ -2068,10 +2365,10 @@ namespace detail {
 
   // Overload for free function.
   template <typename RetType, typename... ArgsType>
-  EMBED_NODISCARD inline function<RetType(ArgsType...)>
+  EMBED_NODISCARD inline function<RetType(ArgsType...) const>
   make_function(RetType (*func) (ArgsType...) EMBED_FN_CASE_NOEXCEPT) noexcept
   {
-    return function<RetType(ArgsType...)>(func);
+    return function<RetType(ArgsType...) const>(func);
   }
 
   // Overload for free function with specified signature.
@@ -2117,41 +2414,26 @@ namespace detail {
   }
 
   // Overload for `embed::Fn<Other, Size>`.
-  template <typename Signature, typename OtherRet, std::size_t BufSize, typename... OtherArgs>
+  template <typename Signature, typename OtherSignature, std::size_t BufSize>
   EMBED_NODISCARD inline typename std::enable_if<
-    detail::FnToolBox::FnTraits::is_similar_Fn<
-      typename detail::FnToolBox::FnTraits::unwrap_signature<Signature>::ret,
-      typename detail::FnToolBox::FnTraits::unwrap_signature<Signature>::args,
-      detail::FnToolBox::FnTraits::unwrap_signature<Signature>::arg_num,
-      BufSize, OtherRet, detail::FnToolBox::FnTraits::args_package<OtherArgs...>,
-      sizeof... (OtherArgs), BufSize
+    detail::FnToolBox::FnTraits::is_similar_Fn_signature<
+      Signature, OtherSignature, BufSize, BufSize
     >::value,
     function<Signature, BufSize>
   >::type
-  make_function(const Fn<OtherRet(OtherArgs...), BufSize>& fn) noexcept
+  make_function(const Fn<OtherSignature, BufSize>& fn) noexcept
   {
     return function<Signature, BufSize>(fn);
   }
-
-  // Helper macro.
-# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
-  F_(, , )                                  \
-  F_(const, , )                             \
-  F_(, volatile, )                          \
-  F_(, , &)                                 \
-  F_(const, volatile, )                     \
-  F_(const, , &)                            \
-  F_(, volatile, &)                         \
-  F_(const, volatile, &)
 
   // Overload for member function.
 # define EMBED_FN_OVERLOAD_MEMBER_FUNCTION(CONST_, VOLATILE_, REF_)                           \
   template <typename Class, typename RetType, typename... ArgsType>                           \
   EMBED_NODISCARD inline auto                                                                 \
   make_function(RetType (Class::* member_func) (ArgsType...) CONST_ VOLATILE_ REF_) noexcept  \
-  -> function<RetType(CONST_ VOLATILE_ Class&, ArgsType...), sizeof(member_func)> {           \
+  -> function<RetType(CONST_ VOLATILE_ Class&, ArgsType...) const, sizeof(member_func)> {     \
     return function<RetType(CONST_ VOLATILE_ Class&,                                          \
-      ArgsType...), sizeof(member_func)>(member_func);                                        \
+      ArgsType...) const, sizeof(member_func)>(member_func);                                  \
   }
 
   // Here, macros are used to overload the make_function, 
@@ -2159,8 +2441,6 @@ namespace detail {
   EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_MEMBER_FUNCTION)
 
 # undef EMBED_FN_OVERLOAD_MEMBER_FUNCTION
-
-# undef EMBED_FN_GENERATE_CODE_C_V_REF
 
 
 #if ( __cpp_deduction_guides >= 201606 ) || ( EMBED_CXX_VERSION >= 201703L )
@@ -2217,6 +2497,9 @@ namespace std EMBED_ABI_VISIBILITY(default)
 #undef EMBED_FN_NOTHROW_CALLABLE
 #undef EMBED_FN_CASE_NOEXCEPT
 #undef EMBED_FN_ENSURE_NO_THROW
+#undef EMBED_FN_NO_WARING
+#undef EMBED_FN_GENERATE_CODE_C_V_REF
+#undef EMBED_FN_SWITCH_EXPECT
 
 #if defined(_MSC_VER)
 # pragma warning(pop)

@@ -144,6 +144,13 @@ namespace embed { namespace detail { namespace fn_no_std {
   template <typename T>
   struct is_const<T const> : true_type {};
 
+  // std::is_volatile
+  template <typename T>
+  struct is_volatile : false_type {};
+
+  template <typename T>
+  struct is_volatile<T volatile> : true_type {};
+
   // std::is_reference
   template <typename T>
   struct is_reference : public false_type {};

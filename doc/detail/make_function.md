@@ -35,26 +35,26 @@ int main()
 {
     Example e;
 
-    // The type of `fn1` is embed::function<void(int,float)>
+    // The type of `fn1` is embed::function<void(int,float) const>
     auto fn1 = embed::make_function(example_free_function);
 
     // The type of `fn2` is embed::function<void(int)>
     auto fn2 = embed::make_function(e);
 
-    // The type of `fn3` is embed::function<void(char)>
+    // The type of `fn3` is embed::function<void(char) const>
     auto fn3 = embed::make_function(&Example::staticFkn);
 
-    // The type of `fn4` is embed::function<void(Example&,float)>
+    // The type of `fn4` is embed::function<void(Example&,float) const>
     auto fn4 = embed::make_function(&Example::memberFkn);
 
-    // The type of `fn5` is embed::function<void(const Example&,double)>
+    // The type of `fn5` is embed::function<void(const Example&,double) const>
     auto fn5 = embed::make_function(&Example::memberFkn_const);
 
-    // The type of `fn6` is embed::function<void()>
+    // The type of `fn6` is embed::function<void() const>
     auto fn6 = embed::make_function(static_cast<void(*)()>(
         example_overload_func));
 
-    // The type of `fn7` is embed::function<int(int)>
+    // The type of `fn7` is embed::function<int(int) const>
     auto fn7 = embed::make_function(static_cast<int(*)(int)>(
         example_overload_func));
 

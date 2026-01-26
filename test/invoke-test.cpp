@@ -7,6 +7,7 @@ TEST_FUNCTION_DECLARE(InvokeTest, ReferenceParamSignatureTest);
 TEST_FUNCTION_DECLARE(InvokeTest, MemberLambdaInvokeTest);
 TEST_FUNCTION_DECLARE(InvokeTest, DiamondInheritanceTset);
 TEST_FUNCTION_DECLARE(InvokeTest, VirtualMethodTest);
+TEST_FUNCTION_DECLARE(InvokeTest, CVRefQualifierTest);
 
 TEST_SUBSYS(InvokeTest, main) {
     TEST_RUN(InvokeTest, AssertSameTest);
@@ -15,6 +16,7 @@ TEST_SUBSYS(InvokeTest, main) {
     TEST_RUN(InvokeTest, MemberLambdaInvokeTest);
     TEST_RUN(InvokeTest, DiamondInheritanceTset);
     TEST_RUN(InvokeTest, VirtualMethodTest);
+    TEST_RUN(InvokeTest, CVRefQualifierTest);
 }
 
 static void testUse__normal_func(void) noexcept { }
@@ -133,8 +135,53 @@ TEST(InvokeTest, VirtualMethodTest) {
     return 0;
 }
 
+struct InvokeTest_CVRefQualifierTest__struct
+{
+    int operator()() const {
+        volatile int a = 123456;
+        return a;
+    }
 
-/// TODO: test my::invoke_result
-/// TODO: test my::invoke_r
-/// TODO: change make_function logic of member function.
+    float operator()(int) const && {
+        volatile float f = 3.1415926535f;
+        return f;
+    }
+
+    double operator()(int, int) {
+        volatile double d = 2.70000000;
+        a++;
+        return d;
+    }
+
+    int a = 0;
+};
+
+TEST(InvokeTest, CVRefQualifierTest) {
+
+    embed::function<int() const, 2*sizeof(void*)> fn1 = InvokeTest_CVRefQualifierTest__struct{};
+    embed::function<int(), 2*sizeof(void*)> fn2 = fn1;
+    embed::function<int() &, 2*sizeof(void*)> fn3 = fn1;
+    embed::function<int() &&, 2*sizeof(void*)> fn4 = fn1;
+    embed::function<int() volatile, 2*sizeof(void*)> fn5 = 
+        InvokeTest_CVRefQualifierTest__struct{};
+
+    fn2 = fn1;
+    fn3 = fn1;
+    fn4 = fn1;
+
+    ASSERT_EQ(fn2(), 123456, "%d");
+    ASSERT_EQ(fn3(), 123456, "%d");
+    ASSERT_EQ(std::move(fn2)(), 123456, "%d");
+    ASSERT_EQ(fn3(), 123456, "%d");
+    ASSERT_EQ(std::move(fn4)(), 123456, "%d");
+    ASSERT_EQ(fn5(), 123456, "%d");
+
+    embed::function<float(int) const &&> fn6 = InvokeTest_CVRefQualifierTest__struct{};
+    ASSERT_EQ_F(std::move(fn6)(1), 3.1415926535f, 0.00001);
+
+    embed::function<float(int) &&> fn7 = std::move(fn6);
+    ASSERT_EQ_F(std::move(fn7)(1), 3.1415926535f, 0.00001);
+
+    return 0;
+}
 
