@@ -55,7 +55,18 @@ if(MSVC)
     /wd4710
     /wd4127
   )
-else()
+elseif(CMAKE_COMPILER_IS_GNUCXX)
+  target_compile_options(
+    ${PROJECT_NAME} PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -pedantic
+    -fno-permissive
+    -O2
+    -fmax-errors=50
+  )
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   target_compile_options(
     ${PROJECT_NAME} PRIVATE
     -Wall
