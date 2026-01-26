@@ -1156,32 +1156,32 @@ namespace detail {
 
 #undef EMBED_FN_GENERATE_CODE_C_V_REF
 
-# define EMBED_FN_GENERATE_CODE_C_V_REF(F_)         \
-    F_(, , , false, false, false, false)            \
-    F_(const, , , true, false, false, false)        \
-    F_(, volatile, , false, true, false, false)     \
-    F_(, , &, false, false, true, false)            \
-    F_(const, volatile, , true, true, false, false) \
-    F_(const, , &, true, false, true, false)        \
-    F_(, volatile, &, false, true, true, false)     \
-    F_(const, volatile, &, true, true, true, false) \
-    F_(, , &&, false, false, false, true)           \
-    F_(const, , &&, true, false, false, true)       \
-    F_(, volatile, &&, false, true, false, true)    \
-    F_(const, volatile, &&, true, true, false, true)
+# define EMBED_FN_GENERATE_CODE_C_V_REF(F_) \
+    F_(, , )                                \
+    F_(const, , )                           \
+    F_(, volatile, )                        \
+    F_(, , &)                               \
+    F_(const, volatile, )                   \
+    F_(const, , &)                          \
+    F_(, volatile, &)                       \
+    F_(const, volatile, &)                  \
+    F_(, , &&)                              \
+    F_(const, , &&)                         \
+    F_(, volatile, &&)                      \
+    F_(const, volatile, &&)
 
     // get_signature_qualifier
     template <typename Signature>
     struct get_signature_qualifier;
 
-#define EMBED_FN_OVERLOAD_GET_SIGNATURE_QUALIFIER(C, V, REF, IS_C, IS_V, IS_L, IS_R)  \
-    template <typename Ret, typename... Args>                                         \
-    struct get_signature_qualifier<Ret(Args...) C V REF>                              \
-    {                                                                                 \
-      static constexpr bool is_const = IS_C;                                          \
-      static constexpr bool is_volatile = IS_V;                                       \
-      static constexpr bool is_lref = IS_L;                                           \
-      static constexpr bool is_rref = IS_R;                                           \
+#define EMBED_FN_OVERLOAD_GET_SIGNATURE_QUALIFIER(C, V, REF)                    \
+    template <typename Ret, typename... Args>                                   \
+    struct get_signature_qualifier<Ret(Args...) C V REF>                        \
+    {                                                                           \
+      static constexpr bool is_const = std::is_const<int C>::value;             \
+      static constexpr bool is_volatile = std::is_volatile<int V>::value;       \
+      static constexpr bool is_lref = std::is_lvalue_reference<int REF>::value; \
+      static constexpr bool is_rref = std::is_lvalue_reference<int REF>::value; \
     };
 
     // Use the macro to generate code for different kinds of signature.
