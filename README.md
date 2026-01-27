@@ -5,7 +5,7 @@
 ![gcc-c++11/14/17/20/23 - passing](https://img.shields.io/badge/GCC_C++11/14/17/20/23-passing-brightgreen?style=flat) ![clang-c++11/14/17/20/23 - passing](https://img.shields.io/badge/Clang_C++11/14/17/20/23-passing-brightgreen?style=flat) ![msvc-c++14/17/20/23 - passing](https://img.shields.io/badge/MSVC_C++14/17/20/23-passing-brightgreen?style=flat)
 
 
-*Embedded friendly `std::function` alternative. The usage method is consistent with `std::function`.*
+*Embedded friendly [`std::function`](http://en.cppreference.com/w/cpp/utility/functional/function) alternative. The usage method is consistent with `std::function`.*
 
 ## Overview
 
@@ -13,7 +13,7 @@
   
   The `embed::function` is used in the same way as `std::function`.
 
-  We also provide `embed::make_function` to automatically deduce the template type.
+  We also provide [`embed::make_function`](./doc/detail/make_function.md) to automatically deduce the template type.
 
 - ✅ **No dynamic memory allocation**
 
@@ -152,3 +152,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Similar implementations
+
+- [std::function](http://en.cppreference.com/w/cpp/utility/functional/function)
+
+- [Naios/function2](https://github.com/Naios/function2)
+
+- [pmed/fixed_size_function](https://github.com/pmed/fixed_size_function)
+
+- [rigtorp/Function](https://github.com/rigtorp/Function)
+
+- [rosbacke/delegate](https://github.com/rosbacke/delegate)
+
+- [winterscar/functional-avr](https://github.com/winterscar/functional-avr)
+
+- [bdiamand/Delegate](https://github.com/bdiamand/Delegate)
