@@ -30,7 +30,7 @@ SOFTWARE.
  * 
  * @version     1.1.2
  * 
- * @date        2025-12-6
+ * @date        2026-1-27
  * 
  * @author      Kim-J-Smith
  * 
@@ -49,6 +49,7 @@ SOFTWARE.
  * the `target_type()` and `target()` member functions. The main reason for 
  * the former is that it relies on RTTI, which is often disabled in the embedded 
  * domain. The latter is due to the reason of thread-safe access isolation.
+ * Additionally, Unlike std::function, embed::function can wrap move-only objects.
  * (more details: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4159.pdf)
  * 
  * By default, the space occupied by a single instance is only the size of
