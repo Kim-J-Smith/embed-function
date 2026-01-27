@@ -344,7 +344,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] EMBED_UNUSED inline void bad_function_call_handler()
+  [[noreturn]] EMBED_UNUSED inline void bad_function_call_handler() noexcept
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -356,7 +356,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] EMBED_UNUSED inline void bad_function_copy_handler()
+  [[noreturn]] EMBED_UNUSED inline void bad_function_copy_handler() noexcept
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
@@ -422,16 +422,25 @@ namespace detail {
   using std::bad_function_call;
 #endif
 
+  template <bool Has_Throw>
+  [[noreturn]] inline typename std::enable_if<!Has_Throw>::type
+  throw_bad_function_call_or_abort_impl() noexcept {
+    bad_function_call_handler();
+  }
+  template <bool Has_Throw>
+  [[noreturn]] inline typename std::enable_if<Has_Throw>::type
+  throw_bad_function_call_or_abort_impl() {
+    throw bad_function_call();
+  }
+
   /// @c throw_bad_function_call_or_abort
   // For private use only.
   [[noreturn]] inline void throw_bad_function_call_or_abort()
+    noexcept(!EMBED_CXX_ENABLE_EXCEPTION || EMBED_FN_ENSURE_NO_THROW)
   {
-#if ( EMBED_CXX_ENABLE_EXCEPTION == true ) && (! EMBED_FN_ENSURE_NO_THROW)
-    throw bad_function_call();
-#else
-    bad_function_call_handler();
-#endif
-
+    throw_bad_function_call_or_abort_impl<
+      EMBED_CXX_ENABLE_EXCEPTION && (!EMBED_FN_ENSURE_NO_THROW)
+    >();
     EMBED_UNREACHABLE(); // Unreachable
   }
 
