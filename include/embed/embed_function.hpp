@@ -2458,9 +2458,14 @@ namespace detail {
   template <typename Class, typename RetType, typename... ArgsType>                           \
   EMBED_NODISCARD inline auto                                                                 \
   make_function(RetType (Class::* member_func) (ArgsType...) CONST_ VOLATILE_ REF_) noexcept  \
-  -> function<RetType(CONST_ VOLATILE_ Class&, ArgsType...) const, sizeof(member_func)> {     \
-    return function<RetType(CONST_ VOLATILE_ Class&,                                          \
-      ArgsType...) const, sizeof(member_func)>(member_func);                                  \
+  -> function<RetType(typename std::conditional<std::is_rvalue_reference<int REF_>::value,    \
+    CONST_ VOLATILE_ Class&&, CONST_ VOLATILE_ Class&>::type, ArgsType...) const,             \
+    sizeof(member_func)>                                                                      \
+  {                                                                                           \
+    return function<RetType(typename std::conditional<                                        \
+      std::is_rvalue_reference<int REF_>::value,                                              \
+      CONST_ VOLATILE_ Class&&, CONST_ VOLATILE_ Class&>::type, ArgsType...) const,           \
+      sizeof(member_func)>(member_func);                                                      \
   }
 
   // Here, macros are used to overload the make_function, 
