@@ -269,6 +269,9 @@ SOFTWARE.
 # elif defined(__GNUC__) || defined(__clang__)
 #  define EMBED_LIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 1))
 #  define EMBED_UNLIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 0))
+# elif EMBED_HAS_BUILTIN(__builtin_expect)
+#  define EMBED_LIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 1))
+#  define EMBED_UNLIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 0))
 # else
 #  define EMBED_LIKELY(condition) (condition)
 #  define EMBED_UNLIKELY(condition) (condition)
