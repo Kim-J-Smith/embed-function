@@ -886,21 +886,38 @@ namespace detail {
         invoke_result<typename std::decay<Functor>::type&&, ArgsT...>, RetT
       >::type::value
     > {
-      using Caller = typename std::decay<Functor>::type&;
-      using Result = invoke_result<Caller, ArgsT...>;
+      using Caller_lref = typename std::decay<Functor>::type&;
+      using Caller_rref = typename std::decay<Functor>::type&&;
+
+      using Result_lref = invoke_result<Caller_lref, ArgsT...>;
+      using Result_rref = invoke_result<Caller_rref, ArgsT...>;
 
 #if ( EMBED_CXX_VERSION >= 201703L ) && (!EMBED_CXX_ENABLE_EXCEPTION)
       // The noexcept-specification is a part of the function type 
       // and may appear as part of any function declarator.
       // And only when `EMBED_CXX_ENABLE_EXCEPTION` is false,
       // embed::Fn::operator() can be `noexcept`.
+
+      template<typename>
+      static std::false_type S_test(...) noexcept { return {}; }
+
+      template<typename Caller_>
+      static typename std::enable_if<
+        noexcept(std::declval<Caller_>()(std::declval<ArgsT>()...)),
+        std::true_type
+      >::type S_test(int) noexcept { return {}; }
+
       using NoThrow_call = typename std::integral_constant<
-        bool, noexcept(std::declval<Caller>()(std::declval<ArgsT>()...))
+        bool, decltype(S_test<Caller_lref>(0))::value
+        || decltype(S_test<Caller_rref>(0))::value
       >::type;
 #else
       using NoThrow_call = std::true_type;
 #endif
-      using NoThrow_conv = typename is_invocable_impl<Result, RetT>::noThrow;
+      using NoThrow_conv = typename std::integral_constant<
+        bool, is_invocable_impl<Result_lref, RetT>::noThrow::value
+        || is_invocable_impl<Result_rref, RetT>::noThrow::value
+      >::type;
 
       static constexpr bool NoThrow_v = NoThrow_call::value && NoThrow_conv::value;
 
