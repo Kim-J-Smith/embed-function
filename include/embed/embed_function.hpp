@@ -2040,6 +2040,24 @@ namespace detail {
       return *this;
     }
 
+    /// @brief Overload the move assign to enhance the performance.
+    Fn& operator=(Fn&& fn) noexcept
+    {
+      if (M_manager != nullptr) {
+        M_manager(M_functor, M_functor, OP_destroy_functor);
+        M_manager = nullptr;
+        M_invoker = nullptr;
+      }
+      if (static_cast<bool>(fn)) {
+        fn.M_manager(M_functor, fn.M_functor, OP_move_functor);
+        M_manager = fn.M_manager;
+        M_invoker = fn.M_invoker;
+        fn.M_manager = nullptr;
+        fn.M_invoker = nullptr;
+      }
+      return *this;
+    }
+
 #else
 
     // Copy constructor for embed::Fn.
@@ -2216,6 +2234,21 @@ namespace detail {
       return *this;
     }
 
+    /// @brief Overload the move assign to enhance the performance.
+    Fn& operator=(Fn&& fn) noexcept
+    {
+      if (M_manager != nullptr) {
+        M_manager(M_functor, M_functor, OP_destroy_functor);
+        M_manager = nullptr;
+      }
+      if (static_cast<bool>(fn)) {
+        fn.M_manager(M_functor, fn.M_functor, OP_move_functor);
+        M_manager = fn.M_manager;
+        fn.M_manager = nullptr;
+      }
+      return *this;
+    }
+
 #endif // End EMBED_FN_NEED_FAST_CALL == true or not
 
     /// @attention operator= may consume more resource,
@@ -2223,15 +2256,6 @@ namespace detail {
     EMBED_INLINE Fn& operator=(const Fn& fn) noexcept
     {
       Fn(fn).swap(*this);
-      return *this;
-    }
-
-    /// @attention operator= may consume more resource,
-    /// maybe copy/move constructor is better.
-    EMBED_INLINE Fn& operator=(Fn&& fn) noexcept
-    {
-      if (this != std::addressof(fn))
-        Fn(std::move(fn)).swap(*this);
       return *this;
     }
 
