@@ -28,9 +28,9 @@ SOFTWARE.
  * 
  * @brief       A very tiny C++ wrapper for callable objects.
  * 
- * @version     1.1.1
+ * @version     1.1.2
  * 
- * @date        2025-12-6
+ * @date        2026-1-27
  * 
  * @author      Kim-J-Smith
  * 
@@ -49,6 +49,7 @@ SOFTWARE.
  * the `target_type()` and `target()` member functions. The main reason for 
  * the former is that it relies on RTTI, which is often disabled in the embedded 
  * domain. The latter is due to the reason of thread-safe access isolation.
+ * Additionally, Unlike std::function, embed::function can wrap move-only objects.
  * (more details: https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4159.pdf)
  * 
  * By default, the space occupied by a single instance is only the size of
@@ -67,7 +68,7 @@ SOFTWARE.
  *  
  *  embed::function<Signature> fn = free_function;
  * 
- *  embed::function<void()> fn = []() { printf("hello\n"); };
+ *  embed::function<void() const> fn = []() { printf("hello\n"); };
  * 
  *  embed::function<Signature> fn = callable_class{};
  * 
@@ -269,6 +270,9 @@ SOFTWARE.
 # elif defined(__GNUC__) || defined(__clang__)
 #  define EMBED_LIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 1))
 #  define EMBED_UNLIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 0))
+# elif EMBED_HAS_BUILTIN(__builtin_expect)
+#  define EMBED_LIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 1))
+#  define EMBED_UNLIKELY(condition) (__builtin_expect(static_cast<bool>(condition), 0))
 # else
 #  define EMBED_LIKELY(condition) (condition)
 #  define EMBED_UNLIKELY(condition) (condition)
@@ -341,7 +345,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the `bad_function_call`
   // only when the C++ exception is disabled.
-  [[noreturn]] EMBED_UNUSED inline void bad_function_call_handler()
+  [[noreturn]] EMBED_UNUSED inline void bad_function_call_handler() noexcept
   {
     /// Your can deal with the `bad_function_call` here.
     /// Or you can just ignore this function, and use
@@ -353,7 +357,7 @@ namespace embed { namespace detail {
 
   // The callback function is to handle the case that
   // copying non-copyable object that has been wrapped in `embed::Fn` instance.
-  [[noreturn]] EMBED_UNUSED inline void bad_function_copy_handler()
+  [[noreturn]] EMBED_UNUSED inline void bad_function_copy_handler() noexcept
   {
     /// Your can deal with the bad function copy here.
     /// Or you can just ignore this function, and use
@@ -419,16 +423,27 @@ namespace detail {
   using std::bad_function_call;
 #endif
 
+  template <bool Has_Throw>
+  [[noreturn]] inline typename std::enable_if<!Has_Throw>::type
+  throw_bad_function_call_or_abort_impl() noexcept {
+    bad_function_call_handler();
+  }
+  template <bool Has_Throw>
+  [[noreturn]] inline typename std::enable_if<Has_Throw>::type
+  throw_bad_function_call_or_abort_impl() {
+#if EMBED_CXX_ENABLE_EXCEPTION
+    throw bad_function_call();
+#endif
+  }
+
   /// @c throw_bad_function_call_or_abort
   // For private use only.
   [[noreturn]] inline void throw_bad_function_call_or_abort()
+    noexcept(!EMBED_CXX_ENABLE_EXCEPTION || EMBED_FN_ENSURE_NO_THROW)
   {
-#if ( EMBED_CXX_ENABLE_EXCEPTION == true ) && (! EMBED_FN_ENSURE_NO_THROW)
-    throw bad_function_call();
-#else
-    bad_function_call_handler();
-#endif
-
+    throw_bad_function_call_or_abort_impl<
+      EMBED_CXX_ENABLE_EXCEPTION && (!EMBED_FN_ENSURE_NO_THROW)
+    >();
     EMBED_UNREACHABLE(); // Unreachable
   }
 
@@ -874,21 +889,38 @@ namespace detail {
         invoke_result<typename std::decay<Functor>::type&&, ArgsT...>, RetT
       >::type::value
     > {
-      using Caller = typename std::decay<Functor>::type&;
-      using Result = invoke_result<Caller, ArgsT...>;
+      using Caller_lref = typename std::decay<Functor>::type&;
+      using Caller_rref = typename std::decay<Functor>::type&&;
+
+      using Result_lref = invoke_result<Caller_lref, ArgsT...>;
+      using Result_rref = invoke_result<Caller_rref, ArgsT...>;
 
 #if ( EMBED_CXX_VERSION >= 201703L ) && (!EMBED_CXX_ENABLE_EXCEPTION)
       // The noexcept-specification is a part of the function type 
       // and may appear as part of any function declarator.
       // And only when `EMBED_CXX_ENABLE_EXCEPTION` is false,
       // embed::Fn::operator() can be `noexcept`.
+
+      template<typename>
+      static std::false_type S_test(...) noexcept { return {}; }
+
+      template<typename Caller_>
+      static typename std::enable_if<
+        noexcept(std::declval<Caller_>()(std::declval<ArgsT>()...)),
+        std::true_type
+      >::type S_test(int) noexcept { return {}; }
+
       using NoThrow_call = typename std::integral_constant<
-        bool, noexcept(std::declval<Caller>()(std::declval<ArgsT>()...))
+        bool, decltype(S_test<Caller_lref>(0))::value
+        || decltype(S_test<Caller_rref>(0))::value
       >::type;
 #else
       using NoThrow_call = std::true_type;
 #endif
-      using NoThrow_conv = typename is_invocable_impl<Result, RetT>::noThrow;
+      using NoThrow_conv = typename std::integral_constant<
+        bool, is_invocable_impl<Result_lref, RetT>::noThrow::value
+        || is_invocable_impl<Result_rref, RetT>::noThrow::value
+      >::type;
 
       static constexpr bool NoThrow_v = NoThrow_call::value && NoThrow_conv::value;
 
@@ -1143,8 +1175,8 @@ namespace detail {
     /// @e unwrap_signature
     template <typename Signature> struct unwrap_signature
     {
-      static_assert(std::is_void<void_t<Signature>>::value,
-        "The Signature must be like `Ret(Args...) [const | volatile | &]`."
+      static_assert(!std::is_void<void_t<Signature>>::value, /* always false */
+        "The Signature must be like `Ret(Args...) [const | volatile | & | &&]`."
         " And your signature format is incorrect.");
     };
 
@@ -1314,37 +1346,10 @@ namespace detail {
       typename std::decay<Functor>::type, Args...>
     {
     private:
-#if defined(EMBED_NO_STD_HEADER)
-      template <typename Func>
-      struct check_is_class : public std::true_type {};
-      template <typename R, typename... As>
-      struct check_is_class<R(*)(As...)> : public std::false_type {};
-
-# define EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF, NOEXC) \
-      template <typename R, typename Cs, typename... As>  \
-      struct check_is_class<R(Cs::*)(As...) C V REF NOEXC> : public std::false_type {};
-
-# if ( EMBED_CXX_VERSION >= 201703L )
-#  define EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER(C, V, REF)\
-      EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF, noexcept) \
-      EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF,)
-# else
-#  define EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER(C, V, REF)\
-      EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF,)
-# endif
-
-      // Overload `is_class_and_has_call_operator::check_is_class`
-      EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER)
-
-# undef EMBED_FN_OVERLOAD_IS_NOT_CLASS
-# undef EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER
-#else
-      template <typename T> using check_is_class = std::is_class<T>;
-#endif // defined(EMBED_NO_STD_HEADER)
       using Base = is_class_and_has_call_operator_helper<Functor, Args...>;
     public:
       static constexpr bool is_class = 
-        check_is_class<typename std::decay<Functor>::type>::value;
+        std::is_class<typename std::decay<Functor>::type>::value;
 
       static constexpr bool value = 
         is_class && (
@@ -1468,7 +1473,7 @@ namespace detail {
 
     template <typename Signature, std::size_t Size>
     static bool M_not_empty_function(const volatile Fn<Signature, Size>& f) noexcept
-    { return static_cast<bool>(f); }
+    { return f.M_manager != nullptr; }
 
     template <typename T>
     static bool M_not_empty_function(T* fp) noexcept
@@ -1735,8 +1740,8 @@ namespace detail {
   struct FnQualifierHelper
   {
     static_assert(
-      std::is_void<FnToolBox::FnTraits::void_t<Signature>>::value /* always false */,
-      "The Signature must be like `Ret(Args...) [const | volatile | &]`."
+      !std::is_void<FnToolBox::FnTraits::void_t<Signature>>::value /* always false */,
+      "The Signature must be like `Ret(Args...) [const | volatile | & | &&]`."
       " And your signature format is incorrect.");
   };
 
@@ -2064,6 +2069,24 @@ namespace detail {
       return *this;
     }
 
+    /// @brief Overload the move assign to enhance the performance.
+    Fn& operator=(Fn&& fn) noexcept
+    {
+      if (M_manager != nullptr) {
+        M_manager(M_functor, M_functor, OP_destroy_functor);
+        M_manager = nullptr;
+        M_invoker = nullptr;
+      }
+      if (static_cast<bool>(fn)) {
+        fn.M_manager(M_functor, fn.M_functor, OP_move_functor);
+        M_manager = fn.M_manager;
+        M_invoker = fn.M_invoker;
+        fn.M_manager = nullptr;
+        fn.M_invoker = nullptr;
+      }
+      return *this;
+    }
+
 #else
 
     // Copy constructor for embed::Fn.
@@ -2240,22 +2263,29 @@ namespace detail {
       return *this;
     }
 
+    /// @brief Overload the move assign to enhance the performance.
+    Fn& operator=(Fn&& fn) noexcept
+    {
+      if (M_manager != nullptr) {
+        M_manager(M_functor, M_functor, OP_destroy_functor);
+        M_manager = nullptr;
+      }
+      if (static_cast<bool>(fn)) {
+        fn.M_manager(M_functor, fn.M_functor, OP_move_functor);
+        M_manager = fn.M_manager;
+        fn.M_manager = nullptr;
+      }
+      return *this;
+    }
+
 #endif // End EMBED_FN_NEED_FAST_CALL == true or not
 
     /// @attention operator= may consume more resource,
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(const Fn& fn) noexcept
     {
-      Fn(fn).swap(*this);
-      return *this;
-    }
-
-    /// @attention operator= may consume more resource,
-    /// maybe copy/move constructor is better.
-    EMBED_INLINE Fn& operator=(Fn&& fn) noexcept
-    {
       if (this != std::addressof(fn))
-        Fn(std::move(fn)).swap(*this);
+        Fn(fn).swap(*this);
       return *this;
     }
 
@@ -2431,9 +2461,14 @@ namespace detail {
   template <typename Class, typename RetType, typename... ArgsType>                           \
   EMBED_NODISCARD inline auto                                                                 \
   make_function(RetType (Class::* member_func) (ArgsType...) CONST_ VOLATILE_ REF_) noexcept  \
-  -> function<RetType(CONST_ VOLATILE_ Class&, ArgsType...) const, sizeof(member_func)> {     \
-    return function<RetType(CONST_ VOLATILE_ Class&,                                          \
-      ArgsType...) const, sizeof(member_func)>(member_func);                                  \
+  -> function<RetType(typename std::conditional<std::is_rvalue_reference<int REF_>::value,    \
+    CONST_ VOLATILE_ Class&&, CONST_ VOLATILE_ Class&>::type, ArgsType...) const,             \
+    sizeof(member_func)>                                                                      \
+  {                                                                                           \
+    return function<RetType(typename std::conditional<                                        \
+      std::is_rvalue_reference<int REF_>::value,                                              \
+      CONST_ VOLATILE_ Class&&, CONST_ VOLATILE_ Class&>::type, ArgsType...) const,           \
+      sizeof(member_func)>(member_func);                                                      \
   }
 
   // Here, macros are used to overload the make_function, 

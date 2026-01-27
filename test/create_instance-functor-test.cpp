@@ -6,10 +6,12 @@
 
 TEST_FUNCTION_DECLARE(CreateInstanceFromFunctor, Copyable);
 TEST_FUNCTION_DECLARE(CreateInstanceFromFunctor, NonCopyable);
+TEST_FUNCTION_DECLARE(CreateInstanceFromFunctor, Qualifier_Single);
 
 TEST_SUBSYS(CreateInstanceFromFunctor, main) {
     TEST_RUN(CreateInstanceFromFunctor, Copyable);
     TEST_RUN(CreateInstanceFromFunctor, NonCopyable);
+    TEST_RUN(CreateInstanceFromFunctor, Qualifier_Single);
 }
 
 class testUse__CopyableObject
@@ -71,3 +73,31 @@ TEST(CreateInstanceFromFunctor, NonCopyable) {
 #endif
     return 0;
 }
+
+struct testUse__Qualifier_C {
+    int operator()(int) const { return 1234; }
+};
+struct testUse__Qualifier_V {
+    int operator()(int) volatile { return 2345; }
+};
+struct testUse__Qualifier_LRef {
+    int operator()(int) & { return 3456; }
+};
+struct testUse__Qualifier_RRef {
+    int operator()(int) && { return 4567; }
+};
+
+TEST(CreateInstanceFromFunctor, Qualifier_Single) {
+    auto fn1 = embed::make_function(testUse__Qualifier_C{});
+    auto fn2 = embed::make_function(testUse__Qualifier_V{});
+    auto fn3 = embed::make_function(testUse__Qualifier_LRef{});
+    auto fn4 = embed::make_function(testUse__Qualifier_RRef{});
+
+    ASSERT_EQ(fn1(1), 1234, "%d");
+    ASSERT_EQ(fn2(2), 2345, "%d");
+    ASSERT_EQ(fn3(3), 3456, "%d");
+    ASSERT_EQ(std::move(fn4)(4), 4567, "%d");
+
+    return 0;
+}
+

@@ -33,6 +33,7 @@ public:
     static int static_func() { return 5678; }
     int const_func() const noexcept { return 9012; }
     int volatile_func() volatile { return 3456; }
+    int rvalue_ref_func() && { return 56789; }
 #if !defined(EMBED_NO_STD_HEADER)
     std::string arg_func(const std::string& str, int num) {
         return str + std::to_string(num);
@@ -117,11 +118,13 @@ TEST(CreateInstanceFromMemberFunction, FnDeduction) {
     embed::Fn fn2 = &TestClass::non_static_func;
     embed::Fn fn3 = &TestClass::static_func;
     embed::Fn fn4 = &TestClass::volatile_func;
+    embed::Fn fn5 = &TestClass::rvalue_ref_func;
 
     ASSERT_EQ(static_cast<bool>(fn1), true, "%d");
     ASSERT_EQ(static_cast<bool>(fn2), true, "%d");
     ASSERT_EQ(static_cast<bool>(fn3), true, "%d");
     ASSERT_EQ(static_cast<bool>(fn4), true, "%d");
+    ASSERT_EQ(static_cast<bool>(fn5), true, "%d");
 
     TestClass t;
 
@@ -129,6 +132,7 @@ TEST(CreateInstanceFromMemberFunction, FnDeduction) {
     ASSERT_EQ(fn2(t), 1234, "%d");
     ASSERT_EQ(fn3(), 5678, "%d");
     ASSERT_EQ(fn4(t), 3456, "%d");
+    ASSERT_EQ(fn5(std::move(t)), 56789, "%d");
 
 #endif
     return 0;

@@ -584,6 +584,63 @@ namespace embed { namespace detail { namespace fn_no_std {
   >::type
   { };
 
+  template <typename Func>
+  struct check_is_class : public true_type {};
+  template <typename R, typename... As>
+  struct check_is_class<R(*)(As...)> : public false_type {};
+  template <typename R, typename Class>
+  struct check_is_class<R Class::*> : public false_type {};
+
+#define EMBED_FN_GENERATE_CODE_C_V_REF(F_)  \
+  F_(, , )                                  \
+  F_(const, , )                             \
+  F_(, volatile, )                          \
+  F_(, , &)                                 \
+  F_(const, volatile, )                     \
+  F_(const, , &)                            \
+  F_(, volatile, &)                         \
+  F_(const, volatile, &)                    \
+  F_(, , &&)                                \
+  F_(const, , &&)                           \
+  F_(, volatile, &&)                        \
+  F_(const, volatile, &&)
+
+#define EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF, NOEXC) \
+  template <typename R, typename Cs, typename... As>  \
+  struct check_is_class<R(Cs::*)(As...) C V REF NOEXC> : public false_type {};
+
+#if ( EMBED_CXX_VERSION >= 201703L )
+# define EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER(C, V, REF)\
+  EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF, noexcept) \
+  EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF,)
+
+  template <typename R, typename... As>
+  struct check_is_class<R(*)(As...) noexcept> : public false_type {};
+#else
+# define EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER(C, V, REF)\
+  EMBED_FN_OVERLOAD_IS_NOT_CLASS(C, V, REF,)
+#endif
+
+  // Overload `is_class_and_has_call_operator::check_is_class`
+  EMBED_FN_GENERATE_CODE_C_V_REF(EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER)
+
+#undef EMBED_FN_OVERLOAD_IS_NOT_CLASS
+#undef EMBED_FN_OVERLOAD_IS_NOT_CLASS_HELPER
+#undef EMBED_FN_GENERATE_CODE_C_V_REF
+
+  // std::is_class
+#if defined(__GNUC__) && (__GNUC__ >= 5)
+  template <typename T>
+  struct is_class : public bool_constant<__is_class(T)> {};
+#elif EMBED_HAS_BUILTIN(__is_class)
+  template <typename T>
+  struct is_class : public bool_constant<__is_class(T)> {};
+#else
+  template <typename T>
+  struct is_class
+  : public bool_constant<check_is_class<T>::value> {};
+#endif
+
   // std::addressof
   template <typename T>
   EMBED_INLINE T* addressof(const T&& t) noexcept = delete;
