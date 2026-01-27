@@ -168,3 +168,5 @@ SOFTWARE.
 - [winterscar/functional-avr](https://github.com/winterscar/functional-avr)
 
 - [bdiamand/Delegate](https://github.com/bdiamand/Delegate)
+
+- [potswa/cxx_function](https://github.com/potswa/cxx_function)

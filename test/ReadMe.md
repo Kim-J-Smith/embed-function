@@ -5,5 +5,5 @@ cd ./test
 
 cmake -B build
 
-cmake --build build --config Release --target run
+cmake --build build --target run
 ```
