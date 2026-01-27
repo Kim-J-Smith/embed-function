@@ -2255,7 +2255,8 @@ namespace detail {
     /// maybe copy/move constructor is better.
     EMBED_INLINE Fn& operator=(const Fn& fn) noexcept
     {
-      Fn(fn).swap(*this);
+      if (this != std::addressof(fn))
+        Fn(fn).swap(*this);
       return *this;
     }
 
