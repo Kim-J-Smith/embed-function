@@ -431,7 +431,9 @@ namespace detail {
   template <bool Has_Throw>
   [[noreturn]] inline typename std::enable_if<Has_Throw>::type
   throw_bad_function_call_or_abort_impl() {
+#if EMBED_CXX_ENABLE_EXCEPTION
     throw bad_function_call();
+#endif
   }
 
   /// @c throw_bad_function_call_or_abort

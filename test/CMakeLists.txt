@@ -65,6 +65,7 @@ elseif(CMAKE_COMPILER_IS_GNUCXX)
     -fno-permissive
     -O2
     -fmax-errors=50
+    -fno-exceptions
   )
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   target_compile_options(
@@ -74,6 +75,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     -Wpedantic
     -pedantic
     -fno-permissive
+    -fno-exceptions
     -O2
   )
 endif()
